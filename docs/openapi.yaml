@@ -1,36 +1,39 @@
 openapi: 3.0.3
 info:
-  title: carta-nombramiento-service
-  version: 0.1.0
+  title: firma-electronica-service
+  version: 0.2.0
   description: |
     Contrato M0 (borrador). Autenticación del host: cabecera `X-Api-Key`.
     Los endpoints `/v1/sign/*` son públicos y se protegen con el token del link + OTP.
+    Una solicitud de firma (`signature request`) es de un `documentType`; la plantilla activa del
+    tenant para ese tipo define el contenido, el formulario y la política de evidencia.
 servers:
   - url: http://localhost:4000
 paths:
-  /v1/letters:
+  /v1/requests:
     post:
-      summary: Crear una carta de nombramiento
+      summary: Crear una solicitud de firma
       security: [{ apiKey: [] }]
       parameters:
         - in: header
           name: Idempotency-Key
           schema: { type: string }
-          description: Evita duplicar la carta si el host reintenta.
+          description: Evita duplicar la solicitud si el host reintenta.
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CreateLetter' }
+            schema: { $ref: '#/components/schemas/CreateRequest' }
       responses:
         '201':
-          description: Carta creada
+          description: Solicitud creada
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Letter' }
-  /v1/letters/{id}:
+              schema: { $ref: '#/components/schemas/SignatureRequest' }
+        '422': { description: Los datos no cumplen el esquema del tipo de documento }
+  /v1/requests/{id}:
     get:
-      summary: Consultar estado de una carta
+      summary: Consultar el estado de una solicitud
       security: [{ apiKey: [] }]
       parameters: [{ $ref: '#/components/parameters/id' }]
       responses:
@@ -38,16 +41,16 @@ paths:
           description: OK
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Letter' }
-  /v1/letters/{id}/revoke:
+              schema: { $ref: '#/components/schemas/SignatureRequest' }
+  /v1/requests/{id}/revoke:
     post:
-      summary: Revocar una carta pendiente
+      summary: Revocar una solicitud pendiente
       security: [{ apiKey: [] }]
       parameters: [{ $ref: '#/components/parameters/id' }]
       responses:
         '200': { description: Revocada }
-        '409': { description: La carta ya no está pendiente }
-  /v1/letters/{id}/document:
+        '409': { description: La solicitud ya no está pendiente }
+  /v1/requests/{id}/document:
     get:
       summary: URL firmada de corta vida al PDF firmado
       security: [{ apiKey: [] }]
@@ -64,7 +67,8 @@ paths:
                   expiresAt: { type: string, format: date-time }
   /v1/sign/{token}/otp:
     post:
-      summary: Pedir el envío del OTP al contacto de la carta
+      summary: Pedir el envío del OTP al contacto de la solicitud
+      description: Solo si la política del tipo exige OTP.
       responses:
         '204': { description: OTP enviado }
         '429': { description: Demasiados intentos }
@@ -81,7 +85,7 @@ paths:
               properties: { code: { type: string, pattern: '^[0-9]{6}$' } }
       responses:
         '200':
-          description: Devuelve la carta para mostrar y un token de sesión corto
+          description: Devuelve el documento para mostrar y un token de sesión corto
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SigningView' }
@@ -90,8 +94,9 @@ paths:
     post:
       summary: Emitir un código aleatorio para la foto (invalida el anterior)
       description: |
-        Requiere sesión verificada con OTP. El cliente escribe el código en un papel y se
-        fotografía con el papel y su DNI. Vence en pocos minutos.
+        Solo si la política del tipo exige desafío de foto. Requiere sesión verificada. El
+        firmante escribe el código en un papel y se fotografía con el papel y su documento.
+        Vence a los 10 minutos.
       responses:
         '200':
           description: Código emitido
@@ -106,60 +111,66 @@ paths:
         '429': { description: Demasiados códigos pedidos }
   /v1/sign/{token}/submit:
     post:
-      summary: Firmar (foto + facultades + aceptación)
+      summary: Firmar
+      description: |
+        `photo` y `challengeId` son obligatorios solo si la política del tipo lo exige.
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
               type: object
-              required: [photo, challengeId, accepted, powers]
+              required: [accepted]
               properties:
                 photo: { type: string, format: binary }
                 challengeId:
                   type: string
                   format: uuid
-                  description: Debe ser el desafío vivo de la carta y no estar vencido al recibir la foto.
+                  description: Debe ser el desafío vivo y no estar vencido al recibir la foto.
                 accepted: { type: boolean }
-                powers:
+                form:
                   type: string
-                  description: JSON con las facultades marcadas y la observación.
+                  description: JSON con lo que el firmante marcó o escribió (carta de nombramiento, facultades y observación).
                 clientInfo:
                   type: string
                   description: JSON con zona horaria y datos del navegador.
       responses:
         '200': { description: Firmada }
-        '409': { description: La carta ya no está pendiente }
+        '409': { description: La solicitud ya no está pendiente }
 components:
   securitySchemes:
     apiKey: { type: apiKey, in: header, name: X-Api-Key }
   parameters:
     id: { in: path, name: id, required: true, schema: { type: string, format: uuid } }
   schemas:
-    CreateLetter:
+    CreateRequest:
       type: object
-      required: [externalRef, signer, insurances, otp, delivery]
+      required: [documentType, externalRef, signer, data, otp, delivery]
       properties:
-        externalRef: { type: string, description: ID del cliente/carta en el host. }
+        documentType:
+          type: string
+          example: APPOINTMENT_LETTER
+          description: Código del tipo de documento (catálogo `document_types`).
+        externalRef: { type: string, description: ID de la solicitud o del cliente en el host. }
         signer:
           type: object
           required: [name, documentType, documentNumber]
           properties:
             name: { type: string }
-            documentType: { type: string, example: DNI }
+            documentType: { type: string, example: DNI, description: Tipo del documento de identidad. }
             documentNumber: { type: string }
-            address: { type: string }
-        insurances:
-          type: array
-          description: Seguros que se nombran (las líneas A, B, C del modelo).
-          items: { type: string }
-          minItems: 1
+        data:
+          type: object
+          description: |
+            Datos propios del tipo de documento, validados contra el esquema de su plantilla.
+            Para APPOINTMENT_LETTER: `{ "insurances": ["Seguro A", "Seguro B"] }` (las líneas
+            A, B, C del modelo, no números de póliza).
         otp:
           type: object
-          required: [channel, to]
           properties:
             channel: { type: string, enum: [SMS, WHATSAPP, EMAIL] }
             to: { type: string }
+          description: Obligatorio si la política del tipo exige OTP.
         delivery:
           type: object
           required: [mode]
@@ -169,10 +180,11 @@ components:
             to: { type: string, description: Solo con mode=SERVICE. }
         expiresInHours: { type: integer, default: 48 }
         webhookUrl: { type: string, description: Si se omite, se usa el del tenant. }
-    Letter:
+    SignatureRequest:
       type: object
       properties:
         id: { type: string, format: uuid }
+        documentType: { type: string }
         reference: { type: string }
         status: { type: string, enum: [PENDING, SIGNED, REJECTED, EXPIRED, REVOKED] }
         signUrl: { type: string, description: Solo con delivery.mode=HOST, en la creación. }
@@ -182,24 +194,31 @@ components:
       type: object
       properties:
         reference: { type: string }
+        documentType: { type: string }
         signerName: { type: string }
-        insurances: { type: array, items: { type: string } }
-        defaultPowers: { type: array, items: { type: object } }
+        content: { type: object, description: Contenido del documento a mostrar. }
+        formSchema: { type: object, description: Campos que el firmante debe completar. }
+        policy:
+          type: object
+          properties:
+            photoRequired: { type: boolean }
+            photoChallengeRequired: { type: boolean }
         clauseVersion: { type: string }
         clauseText: { type: string }
         sessionToken: { type: string }
   webhooks:
-    letterSigned:
+    signatureEvent:
       post:
-        summary: letter.signed — firmado con HMAC-SHA256 en `X-Signature`
+        summary: Evento de la solicitud; firmado con HMAC-SHA256 en `X-Signature`
         requestBody:
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  event: { type: string, enum: [letter.signed, letter.expired, letter.revoked] }
-                  letterId: { type: string }
+                  event: { type: string, enum: [signature.signed, signature.expired, signature.revoked] }
+                  requestId: { type: string }
+                  documentType: { type: string }
                   externalRef: { type: string }
                   signedAt: { type: string, format: date-time }
                   pdfSha256: { type: string }
