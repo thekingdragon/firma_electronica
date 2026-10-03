@@ -56,6 +56,15 @@ si cambian los datos, se crea otra.
 - OTP verificado: canal, destino enmascarado, fecha/hora, intentos.
 - Foto capturada con la cámara (`getUserMedia`, sin selector de archivos), en la mayor resolución
   que dé el dispositivo, con su hash.
+- **Desafío aleatorio de la foto:** el servidor emite un código de 4 dígitos (`photo_challenges`);
+  el cliente lo escribe en un papel y se fotografía con el papel y el DNI. Se guarda el código, la
+  hora de emisión y la hora de recepción de la foto (ambas del servidor). La foto solo vale si el
+  desafío sigue vivo al recibirla. Pedir un código nuevo invalida el anterior. Esto es lo que
+  sostiene «en ese momento»: una foto previa o una cámara virtual con imagen preparada no puede
+  contener un código que aún no existía. La comparación del código con la foto la hace una
+  persona en fase 1; automatizarla (OCR) queda para después.
+- Ventana del desafío: **10 minutos**, pensada para conexiones lentas de provincias; el cliente
+  puede reintentar el envío con el mismo desafío mientras siga vivo.
 - Facultades marcadas y texto de «Observación», tal como las vio el cliente.
 - IP, user agent, zona horaria del navegador, timestamp del servidor.
 - Hash SHA-256 del PDF final y del snapshot original.

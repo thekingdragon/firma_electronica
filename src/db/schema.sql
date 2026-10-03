@@ -62,10 +62,28 @@ CREATE TABLE letters (
 );
 CREATE INDEX letters_pending_expiry_idx ON letters (expires_at) WHERE status = 'PENDING';
 
+-- Desafío de la foto: código aleatorio que el cliente escribe en un papel y fotografía junto
+-- al DNI. Un código emitido ahora no puede estar en una foto tomada antes de emitirse.
+-- Pedir uno nuevo invalida el anterior (solo uno vivo por carta).
+CREATE TABLE photo_challenges (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  letter_id     uuid NOT NULL REFERENCES letters(id),
+  code          char(4) NOT NULL CHECK (code ~ '^[0-9]{4}$'),
+  issued_at     timestamptz NOT NULL DEFAULT now(),
+  expires_at    timestamptz NOT NULL,
+  consumed_at   timestamptz,
+  superseded_at timestamptz,
+  CHECK (expires_at > issued_at)
+);
+CREATE UNIQUE INDEX photo_challenges_one_live_idx
+  ON photo_challenges (letter_id) WHERE consumed_at IS NULL AND superseded_at IS NULL;
+
 CREATE TABLE letter_evidence (
   letter_id          uuid PRIMARY KEY REFERENCES letters(id),
   otp_verified_at    timestamptz NOT NULL,
   otp_attempts       integer NOT NULL,
+  challenge_id       uuid REFERENCES photo_challenges(id),
+  photo_received_at  timestamptz,       -- hora del SERVIDOR; el EXIF lo controla el cliente
   photo_path         text,              -- se vacía al vencer la retención
   photo_sha256       char(64) NOT NULL,
   photo_width        integer,
