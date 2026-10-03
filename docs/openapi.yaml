@@ -1,0 +1,184 @@
+openapi: 3.0.3
+info:
+  title: carta-nombramiento-service
+  version: 0.1.0
+  description: |
+    Contrato M0 (borrador). Autenticación del host: cabecera `X-Api-Key`.
+    Los endpoints `/v1/sign/*` son públicos y se protegen con el token del link + OTP.
+servers:
+  - url: http://localhost:4000
+paths:
+  /v1/letters:
+    post:
+      summary: Crear una carta de nombramiento
+      security: [{ apiKey: [] }]
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema: { type: string }
+          description: Evita duplicar la carta si el host reintenta.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateLetter' }
+      responses:
+        '201':
+          description: Carta creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Letter' }
+  /v1/letters/{id}:
+    get:
+      summary: Consultar estado de una carta
+      security: [{ apiKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Letter' }
+  /v1/letters/{id}/revoke:
+    post:
+      summary: Revocar una carta pendiente
+      security: [{ apiKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      responses:
+        '200': { description: Revocada }
+        '409': { description: La carta ya no está pendiente }
+  /v1/letters/{id}/document:
+    get:
+      summary: URL firmada de corta vida al PDF firmado
+      security: [{ apiKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: string }
+                  expiresAt: { type: string, format: date-time }
+  /v1/sign/{token}/otp:
+    post:
+      summary: Pedir el envío del OTP al contacto de la carta
+      responses:
+        '204': { description: OTP enviado }
+        '429': { description: Demasiados intentos }
+  /v1/sign/{token}/verify:
+    post:
+      summary: Verificar el OTP y abrir la sesión de firma
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties: { code: { type: string, pattern: '^[0-9]{6}$' } }
+      responses:
+        '200':
+          description: Devuelve la carta para mostrar y un token de sesión corto
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SigningView' }
+        '401': { description: Código incorrecto o vencido }
+  /v1/sign/{token}/submit:
+    post:
+      summary: Firmar (foto + facultades + aceptación)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [photo, accepted, powers]
+              properties:
+                photo: { type: string, format: binary }
+                accepted: { type: boolean }
+                powers:
+                  type: string
+                  description: JSON con las facultades marcadas y la observación.
+                clientInfo:
+                  type: string
+                  description: JSON con zona horaria y datos del navegador.
+      responses:
+        '200': { description: Firmada }
+        '409': { description: La carta ya no está pendiente }
+components:
+  securitySchemes:
+    apiKey: { type: apiKey, in: header, name: X-Api-Key }
+  parameters:
+    id: { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+  schemas:
+    CreateLetter:
+      type: object
+      required: [externalRef, signer, insurances, otp, delivery]
+      properties:
+        externalRef: { type: string, description: ID del cliente/carta en el host. }
+        signer:
+          type: object
+          required: [name, documentType, documentNumber]
+          properties:
+            name: { type: string }
+            documentType: { type: string, example: DNI }
+            documentNumber: { type: string }
+            address: { type: string }
+        insurances:
+          type: array
+          description: Seguros que se nombran (las líneas A, B, C del modelo).
+          items: { type: string }
+          minItems: 1
+        otp:
+          type: object
+          required: [channel, to]
+          properties:
+            channel: { type: string, enum: [SMS, WHATSAPP, EMAIL] }
+            to: { type: string }
+        delivery:
+          type: object
+          required: [mode]
+          properties:
+            mode: { type: string, enum: [SERVICE, HOST] }
+            channel: { type: string, enum: [SMS, WHATSAPP, EMAIL] }
+            to: { type: string, description: Solo con mode=SERVICE. }
+        expiresInHours: { type: integer, default: 48 }
+        webhookUrl: { type: string, description: Si se omite, se usa el del tenant. }
+    Letter:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        reference: { type: string }
+        status: { type: string, enum: [PENDING, SIGNED, REJECTED, EXPIRED, REVOKED] }
+        signUrl: { type: string, description: Solo con delivery.mode=HOST, en la creación. }
+        expiresAt: { type: string, format: date-time }
+        signedAt: { type: string, format: date-time, nullable: true }
+    SigningView:
+      type: object
+      properties:
+        reference: { type: string }
+        signerName: { type: string }
+        insurances: { type: array, items: { type: string } }
+        defaultPowers: { type: array, items: { type: object } }
+        clauseVersion: { type: string }
+        clauseText: { type: string }
+        sessionToken: { type: string }
+  webhooks:
+    letterSigned:
+      post:
+        summary: letter.signed — firmado con HMAC-SHA256 en `X-Signature`
+        requestBody:
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  event: { type: string, enum: [letter.signed, letter.expired, letter.revoked] }
+                  letterId: { type: string }
+                  externalRef: { type: string }
+                  signedAt: { type: string, format: date-time }
+                  pdfSha256: { type: string }
+                  documentUrl: { type: string, description: URL firmada de corta vida. }
