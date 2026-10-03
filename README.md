@@ -11,7 +11,7 @@ datos y recibe un webhook cuando el firmante firma. No lee la base del host.
 ## Estado
 
 **M0 — diseño.** Aún no hay código ejecutable. Ver [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md),
-[docs/openapi.yaml](docs/openapi.yaml) y [src/db/schema.sql](src/db/schema.sql) (el SQL se validó
+[docs/openapi.yaml](docs/openapi.yaml) y [migrations/0000_inicial.sql](migrations/0000_inicial.sql) (el SQL se validó
 contra un Postgres temporal: crea las 9 tablas sin errores).
 
 ## ⚠️ No usar con clientes reales todavía

@@ -17,7 +17,7 @@
 
 ## 2. Pila
 
-NestJS + PostgreSQL (SQL a mano, ver `src/db/schema.sql`), `pdf-lib` para el PDF, SPA mínima
+NestJS + PostgreSQL (SQL a mano, ver `migrations/`), `pdf-lib` para el PDF, SPA mínima
 React/Vite para la página de firma servida por el propio servicio. Almacenamiento con proveedor
 intercambiable (disco local o S3). Cola (BullMQ + Redis) para webhooks con reintento y para
 expirar solicitudes.

@@ -1,6 +1,5 @@
--- Esquema M0 (borrador, sin ejecutar contra una base real todavía).
--- Se convertirá en migrations/0000_inicial.sql al arrancar M1.
--- Modelo genérico: una solicitud de firma (signature_requests) de un tipo de documento.
+-- 0000: esquema inicial. Modelo genérico: una solicitud de firma (signature_requests) de un
+-- tipo de documento (document_types), con la política de evidencia en la plantilla.
 
 CREATE TYPE request_status AS ENUM ('PENDING', 'SIGNED', 'REJECTED', 'EXPIRED', 'REVOKED');
 CREATE TYPE notify_channel AS ENUM ('SMS', 'WHATSAPP', 'EMAIL');
