@@ -28,6 +28,21 @@ export interface SignatureRequestView {
   signedAt: string | null;
 }
 
+/** Lo que ve el panel y el host al listar o abrir una solicitud. */
+export interface SignatureRequestSummary extends SignatureRequestView {
+  externalRef: string;
+  signerName: string;
+  /** Datos propios del tipo de documento (en la carta: los seguros nombrados). */
+  data: Record<string, unknown>;
+  createdAt: string;
+}
+
+interface SummaryRow extends RequestRow {
+  external_ref: string;
+  snapshot: { signer: { name: string }; data: Record<string, unknown> };
+  created_at: Date;
+}
+
 interface TemplateRow {
   id: string;
   otp_required: boolean;
@@ -173,6 +188,52 @@ export class RequestsService {
       }
     }
     throw new ApiError(503, 'REFERENCE_UNAVAILABLE', 'No se pudo generar una referencia única; reintente.');
+  }
+
+  /** Solicitudes del tenant, las más nuevas primero. Nunca devuelve las de otro tenant. */
+  async list(
+    tenant: Tenant,
+    opts: { status?: RequestStatus; limit: number },
+  ): Promise<SignatureRequestSummary[]> {
+    const { rows } = await this.pool.query<SummaryRow>(
+      `SELECT id, document_type, reference, status, snapshot_sha256, delivery_mode, expires_at,
+              signed_at, external_ref, snapshot, created_at
+         FROM signature_requests
+        WHERE tenant_id = $1 AND ($2::request_status IS NULL OR status = $2::request_status)
+        ORDER BY created_at DESC, id DESC
+        LIMIT $3`,
+      [tenant.id, opts.status ?? null, opts.limit],
+    );
+    return rows.map((r) => this.toSummary(r));
+  }
+
+  /** Una solicitud del tenant, o 404. Un id de otro tenant es indistinguible de uno inexistente. */
+  async get(tenant: Tenant, id: string): Promise<SignatureRequestSummary> {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      throw new ApiError(404, 'REQUEST_NOT_FOUND', 'Solicitud no encontrada.');
+    }
+    const { rows } = await this.pool.query<SummaryRow>(
+      `SELECT id, document_type, reference, status, snapshot_sha256, delivery_mode, expires_at,
+              signed_at, external_ref, snapshot, created_at
+         FROM signature_requests
+        WHERE tenant_id = $1 AND id = $2`,
+      [tenant.id, id],
+    );
+    if (!rows[0]) throw new ApiError(404, 'REQUEST_NOT_FOUND', 'Solicitud no encontrada.');
+    return this.toSummary(rows[0]);
+  }
+
+  private toSummary(r: SummaryRow): SignatureRequestSummary {
+    const view = this.toView(r);
+    // El link solo sirve mientras la solicitud está pendiente.
+    if (r.status !== 'PENDING') delete view.signUrl;
+    return {
+      ...view,
+      externalRef: r.external_ref,
+      signerName: r.snapshot.signer.name,
+      data: r.snapshot.data,
+      createdAt: r.created_at.toISOString(),
+    };
   }
 
   private validateContacts(input: CreateRequestInput, otpRequired: boolean): void {

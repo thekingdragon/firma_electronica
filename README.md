@@ -33,8 +33,12 @@ cp apps/api/.env.example apps/api/.env      # completar DATABASE_URL, TOKEN_SECR
 npm install
 npm run db:migrate
 npm run tenant:create -w api -- --name "Mi Corredora" --country PE --legal-name "Mi Corredora SAC"
-npm run dev
+npm run dev                                  # API en :4000
+npm run dev -w web                           # panel en http://127.0.0.1:5180
 ```
+
+El panel (`apps/web`) pide la clave de API del tenant. Es una solución provisional para uso local:
+ver ARQUITECTURA §13 antes de exponerlo.
 
 `tenant:create` imprime la clave de API una sola vez; guárdala. Las pruebas unitarias son
 `npm test`. Las de integración (`npm run test:e2e -w api`) necesitan `TEST_DATABASE_URL` apuntando a

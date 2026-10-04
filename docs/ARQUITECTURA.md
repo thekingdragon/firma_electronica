@@ -168,8 +168,8 @@ desplegado.
 Monorepo (`apps/*`), independiente de cualquier host:
 
 1. **`apps/api`** — API para hosts (`X-Api-Key`). Es lo único de M1.
-2. **`apps/web`** — a partir de M2: la **página pública de firma** y, después (M2.5), un **panel
-   propio** para quien use el servicio sin un sistema detrás: login, listar y crear solicitudes,
+2. **`apps/web`** — el **panel propio** (primera versión hecha) y, a continuación, la **página
+   pública de firma**. El panel para quien use el servicio sin un sistema detrás: login, listar y crear solicitudes,
    enviar el link (correo, o enlace `wa.me` con el mensaje prellenado para WhatsApp, sin proveedor
    de pago), revocar, descargar PDF y **revisar la foto** (la revisión humana de la fase 1 necesita
    dónde vivir cuando no hay host).
@@ -201,3 +201,12 @@ token del link derivado por HMAC (`TOKEN_SECRET`), del que en base solo queda el
   y desafío de foto (política de la fase 1, cambiable por plantilla).
 - **Aún no disponibles:** envío del link por el servicio (`delivery.mode=SERVICE`) y OTP por SMS o
   WhatsApp; se rechazan con `CHANNEL_NOT_AVAILABLE` en vez de aceptarse sin enviar nada.
+
+- **El panel entra con la clave de API del tenant** (primera iteración, sin usuarios ni
+  contraseñas): vale para uso local y de prueba. **No exponerlo a otras personas ni a Internet**
+  hasta reemplazarlo por un login real: quien tenga la clave tiene el control total del tenant, y
+  se guarda en el `localStorage` del navegador.
+- **El enlace de firma aún no abre**: la página pública de firma no existe. El panel lo avisa con
+  un cartel (`SIGNING_PAGE_READY` en `apps/web/src/config.ts`).
+- Puertos de desarrollo: API 4000, panel 5180 (`strictPort`; el 5173 es la web de Polix en
+  producción).

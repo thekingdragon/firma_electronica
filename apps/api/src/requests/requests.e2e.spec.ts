@@ -271,4 +271,71 @@ describe('POST /v1/requests', () => {
       expect(res.body.code).toBe('INVALID_IDEMPOTENCY_KEY');
     });
   });
+
+  describe('lectura (lo que consume el panel)', () => {
+    const get = (key: string | undefined, path: string) => {
+      const r = request(app.getHttpServer()).get(path);
+      if (key) r.set('X-Api-Key', key);
+      return r;
+    };
+
+    it('GET /v1/me devuelve el tenant dueño de la clave y exige clave', async () => {
+      const ok = await get(keyA, '/v1/me');
+      expect(ok.status).toBe(200);
+      expect(ok.body).toEqual({ name: 'A', country: 'PE', legalName: 'Corredora A SAC' });
+      expect((await get(undefined, '/v1/me')).status).toBe(401);
+    });
+
+    it('listar devuelve solo las solicitudes del tenant, las más nuevas primero', async () => {
+      const creada = await post(keyA, { ...validBody(), externalRef: 'lista-A' });
+      await post(keyB, { ...validBody(), externalRef: 'lista-B' });
+      const resA = await get(keyA, '/v1/requests');
+      const resB = await get(keyB, '/v1/requests');
+      expect(resA.status).toBe(200);
+      expect(resA.body.items[0].id).toBe(creada.body.id);
+      expect(resA.body.items.every((i: { externalRef: string }) => i.externalRef !== 'lista-B')).toBe(true);
+      expect(resB.body.items.every((i: { externalRef: string }) => i.externalRef !== 'lista-A')).toBe(true);
+      const fechas = resA.body.items.map((i: { createdAt: string }) => i.createdAt);
+      expect([...fechas].sort().reverse()).toEqual(fechas);
+    });
+
+    it('el resumen trae firmante, datos del tipo y link mientras está pendiente', async () => {
+      const creada = await post(keyA, validBody());
+      const res = await get(keyA, `/v1/requests/${creada.body.id}`);
+      expect(res.status).toBe(200);
+      expect(res.body.signerName).toBe('Ana Pérez Quispe');
+      expect(res.body.data).toEqual({ insurances: ['SCTR Salud', 'SCTR Pensión'] });
+      expect(res.body.signUrl).toBe(creada.body.signUrl);
+    });
+
+    it('un id de otro tenant da 404, igual que uno inexistente', async () => {
+      const deA = await post(keyA, validBody());
+      const cruzado = await get(keyB, `/v1/requests/${deA.body.id}`);
+      const inexistente = await get(keyB, '/v1/requests/00000000-0000-4000-8000-000000000000');
+      expect(cruzado.status).toBe(404);
+      expect(inexistente.status).toBe(404);
+      expect(cruzado.body).toEqual(inexistente.body);
+    });
+
+    it('un id mal formado da 404 (no un error de la base)', async () => {
+      expect((await get(keyA, '/v1/requests/no-es-uuid')).status).toBe(404);
+    });
+
+    it('una solicitud que ya no está pendiente no expone el link', async () => {
+      const creada = await post(keyA, validBody());
+      await pool.query(`UPDATE signature_requests SET status = 'REVOKED' WHERE id = $1`, [creada.body.id]);
+      const res = await get(keyA, `/v1/requests/${creada.body.id}`);
+      expect(res.body.status).toBe('REVOKED');
+      expect(res.body.signUrl).toBeUndefined();
+    });
+
+    it('filtra por estado y valida el filtro', async () => {
+      const revocadas = await get(keyA, '/v1/requests?status=REVOKED');
+      expect(revocadas.body.items.length).toBeGreaterThan(0);
+      expect(revocadas.body.items.every((i: { status: string }) => i.status === 'REVOKED')).toBe(true);
+      expect((await get(keyA, '/v1/requests?status=INVENTADO')).status).toBe(422);
+      expect((await get(keyA, '/v1/requests?limit=0')).status).toBe(422);
+      expect((await get(keyA, '/v1/requests?limit=2')).body.items.length).toBeLessThanOrEqual(2);
+    });
+  });
 });
