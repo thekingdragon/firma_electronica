@@ -57,6 +57,8 @@ export interface CapturedMail {
   from: { address: string; name: string | null };
   subject: string;
   text: string;
+  /** El mensaje completo tal como llegó (incluye adjuntos codificados). */
+  raw: string;
 }
 
 /** Lector mínimo de un correo MIME: cabeceras (con plegado) y la parte text/plain, decodificada. */
@@ -108,6 +110,7 @@ export function parseMail(raw: string): CapturedMail {
     from: m ? { address: m[2], name: m[1]?.trim() || null } : { address: fromRaw, name: null },
     subject: headers.get('subject') ?? '',
     text,
+    raw,
   };
 }
 

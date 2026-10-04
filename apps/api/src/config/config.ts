@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { z } from 'zod';
 import { parseSecretsKey } from '../common/secret-box';
 
@@ -28,6 +29,8 @@ const envSchema = z.object({
   // Saltos de proxy delante de la API (p. ej. 1 con el túnel de Cloudflare). Sin esto la IP que se
   // guarda como evidencia sería la del proxy, no la del firmante.
   TRUST_PROXY: z.coerce.number().int().min(0).max(10).optional(),
+  // Carpeta de los archivos cifrados (fotos y PDF). Fuera del repo y con copias de respaldo.
+  STORAGE_DIR: z.string().min(1).default('./storage'),
 });
 
 export type AppConfig = {
@@ -39,6 +42,7 @@ export type AppConfig = {
   secretsKey: Buffer | null;
   allowDevOtp: boolean;
   trustProxy: number | null;
+  storageDir: string;
 };
 
 /** Lee y valida el entorno. Falla al arrancar, no en la primera petición. */
@@ -62,5 +66,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     secretsKey: e.SECRETS_KEY ? parseSecretsKey(e.SECRETS_KEY) : null,
     allowDevOtp: e.ALLOW_DEV_OTP,
     trustProxy: e.TRUST_PROXY ?? null,
+    storageDir: resolve(e.STORAGE_DIR),
   };
 }

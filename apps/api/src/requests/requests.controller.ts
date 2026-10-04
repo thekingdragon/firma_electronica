@@ -53,6 +53,25 @@ export class RequestsController {
     return { items: await this.requests.list(tenant, { status: status as RequestStatus | undefined, limit: n }) };
   }
 
+  @Get(':id/document')
+  async document(@CurrentTenant() tenant: Tenant, @Param('id') id: string, @Res() res: Response): Promise<void> {
+    await this.sendFile(res, await this.requests.getFile(tenant, id, 'document'));
+  }
+
+  @Get(':id/photo')
+  async photo(@CurrentTenant() tenant: Tenant, @Param('id') id: string, @Res() res: Response): Promise<void> {
+    await this.sendFile(res, await this.requests.getFile(tenant, id, 'photo'));
+  }
+
+  private sendFile(res: Response, f: { bytes: Buffer; contentType: string; filename: string }): void {
+    res
+      .status(200)
+      .setHeader('Content-Type', f.contentType)
+      .setHeader('Content-Disposition', `inline; filename="${f.filename}"`)
+      .setHeader('X-Content-Type-Options', 'nosniff')
+      .send(f.bytes);
+  }
+
   @Get(':id')
   get(@CurrentTenant() tenant: Tenant, @Param('id') id: string): Promise<SignatureRequestSummary> {
     return this.requests.get(tenant, id);

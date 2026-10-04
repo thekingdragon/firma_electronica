@@ -3,5 +3,8 @@ dist/
 .env
 .env.*
 !.env.example
-storage/
+# Archivos cifrados en tiempo de ejecución (fotos y PDF). Anclado a la raíz de cada app: un patrón
+# suelto «storage/» también ignoraría el código en src/storage/.
+/storage/
+/apps/*/storage/
 *.dump

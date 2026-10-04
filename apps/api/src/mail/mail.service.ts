@@ -26,6 +26,7 @@ export interface MailMessage {
   subject: string;
   text: string;
   html?: string;
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
 }
 
 export interface MailSettingsInput {
@@ -96,6 +97,7 @@ export class MailService {
         subject: message.subject,
         text: message.text,
         html: message.html,
+        attachments: message.attachments,
       });
       await this.pool.query(
         `UPDATE tenant_mail_settings SET last_ok_at = now(), last_error = NULL, last_error_at = NULL WHERE tenant_id = $1`,

@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { open, parseSecretsKey, seal } from './secret-box';
+import { open, openBytes, parseSecretsKey, seal, sealBytes } from './secret-box';
 
 const KEY = randomBytes(32);
 
@@ -35,6 +35,44 @@ describe('secret-box', () => {
   it('rechaza un formato desconocido', () => {
     expect(() => open(KEY, 'smtp-password', 'v9:a:b:c')).toThrow(/formato desconocido/);
     expect(() => open(KEY, 'smtp-password', 'texto-suelto')).toThrow(/formato desconocido/);
+  });
+
+  describe('sealBytes / openBytes', () => {
+    const foto = randomBytes(5000);
+
+    it('cifra y descifra un binario byte a byte', () => {
+      expect(openBytes(KEY, 'files', sealBytes(KEY, 'files', foto)).equals(foto)).toBe(true);
+    });
+
+    it('el resultado no contiene el original y cambia en cada cifrado', () => {
+      const a = sealBytes(KEY, 'files', foto);
+      expect(a.includes(foto.subarray(0, 64))).toBe(false);
+      expect(a.equals(sealBytes(KEY, 'files', foto))).toBe(false);
+    });
+
+    it('soporta un archivo vacío', () => {
+      expect(openBytes(KEY, 'files', sealBytes(KEY, 'files', Buffer.alloc(0))).length).toBe(0);
+    });
+
+    it('con otra clave o propósito no descifra', () => {
+      const sealed = sealBytes(KEY, 'files', foto);
+      expect(() => openBytes(randomBytes(32), 'files', sealed)).toThrow();
+      expect(() => openBytes(KEY, 'smtp-password', sealed)).toThrow();
+    });
+
+    it('detecta un byte alterado en cualquier parte', () => {
+      const sealed = sealBytes(KEY, 'files', foto);
+      for (const pos of [5, 20, 40, sealed.length - 1]) {
+        const roto = Buffer.from(sealed);
+        roto[pos] ^= 0xff;
+        expect(() => openBytes(KEY, 'files', roto)).toThrow();
+      }
+    });
+
+    it('rechaza un archivo truncado o con otro formato', () => {
+      expect(() => openBytes(KEY, 'files', Buffer.from('corto'))).toThrow(/formato desconocido/);
+      expect(() => openBytes(KEY, 'files', Buffer.alloc(100))).toThrow(/formato desconocido/);
+    });
   });
 
   describe('parseSecretsKey', () => {

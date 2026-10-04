@@ -48,6 +48,7 @@ export interface LinkRow {
   status: 'PENDING' | 'SIGNED' | 'REJECTED' | 'EXPIRED' | 'REVOKED';
   expires_at: Date;
   expired: boolean;
+  pdf_path: string | null;
   otp_channel: 'SMS' | 'WHATSAPP' | 'EMAIL' | null;
   otp_to: string | null;
   snapshot: { signer: SigningView['signer']; data: Record<string, unknown> };
@@ -64,7 +65,7 @@ export interface LinkRow {
 const TOKEN_FORMAT = /^[A-Za-z0-9_-]{43}$/;
 
 /** `inet` solo acepta direcciones válidas: un valor raro no debe tumbar el registro de evidencia. */
-function toInet(ip: string | null): string | null {
+export function toInet(ip: string | null): string | null {
   if (!ip) return null;
   const clean = ip.replace(/^::ffff:/, '');
   return isIP(clean) ? clean : null;
@@ -87,11 +88,12 @@ export class SignService {
     return row;
   }
 
-  private async find(token: string): Promise<LinkRow> {
+  /** Busca por token SIN exigir que siga abierta (p. ej. para descargar la copia ya firmada). */
+  async find(token: string): Promise<LinkRow> {
     if (!TOKEN_FORMAT.test(token)) throw this.notFound();
     const { rows } = await this.pool.query<LinkRow>(
       `SELECT r.id, r.tenant_id, r.document_type, r.reference, r.status, r.expires_at,
-              (r.expires_at <= now()) AS expired,
+              (r.expires_at <= now()) AS expired, r.pdf_path,
               r.otp_channel, r.otp_to, r.snapshot,
               t.legal_name, t.registry_code,
               d.version AS template_version, d.body_json, d.annex_text, d.clause_text,
@@ -110,7 +112,7 @@ export class SignService {
     return new ApiError(404, 'LINK_NOT_FOUND', 'Este enlace no es válido.');
   }
 
-  private assertOpen(row: LinkRow): void {
+  assertOpen(row: LinkRow): void {
     if (row.status === 'SIGNED') {
       throw new ApiError(410, 'ALREADY_SIGNED', 'Este documento ya fue firmado.');
     }
@@ -231,10 +233,15 @@ export class SignService {
   /** Abre el documento con una sesión ya verificada (p. ej. al recargar la página). */
   async view(token: string, sessionToken: string | undefined): Promise<SigningView> {
     const row = await this.open(token);
+    this.assertSession(row, sessionToken);
+    return this.buildView(row);
+  }
+
+  /** La sesión debe ser válida y de ESTA solicitud. */
+  assertSession(row: LinkRow, sessionToken: string | undefined): void {
     if (!sessionToken || !verifySessionToken(this.config.tokenSecret, sessionToken, row.id)) {
       throw new ApiError(401, 'SESSION_INVALID', 'Su sesión venció. Vuelva a verificar su código.');
     }
-    return this.buildView(row);
   }
 
   private async checkOtp(row: LinkRow, code: string, ctx: ClientContext): Promise<void> {
@@ -310,7 +317,7 @@ export class SignService {
     return { to: row.otp_to as string, subject: 'Su código de verificación para firmar', text, html };
   }
 
-  private async log(requestId: string, event: string, ctx: ClientContext, detail?: Record<string, unknown>): Promise<void> {
+  async log(requestId: string, event: string, ctx: ClientContext, detail?: Record<string, unknown>): Promise<void> {
     try {
       await this.pool.query(
         'INSERT INTO access_log (request_id, event, ip, user_agent, detail) VALUES ($1, $2, $3, $4, $5)',

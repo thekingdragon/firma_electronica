@@ -7,6 +7,8 @@ import { canonicalJson } from '../common/canonical-json';
 import { randomCode, sha256Hex, signTokenFor } from '../common/crypto';
 import { AppConfig, APP_CONFIG } from '../config/config';
 import { PG_POOL } from '../db/db.module';
+import { imageInfo } from '../documents/image-info';
+import { StorageService } from '../storage/storage.service';
 import { Tenant } from '../tenants/tenants.service';
 import {
   AVAILABLE_CHANNELS,
@@ -70,6 +72,7 @@ export class RequestsService {
   constructor(
     @Inject(PG_POOL) private readonly pool: Pool,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly storage: StorageService,
   ) {}
 
   /** Valida el cuerpo crudo; devuelve el input listo o lanza 422 con el detalle por campo. */
@@ -221,6 +224,42 @@ export class RequestsService {
     );
     if (!rows[0]) throw new ApiError(404, 'REQUEST_NOT_FOUND', 'Solicitud no encontrada.');
     return this.toSummary(rows[0]);
+  }
+
+  /**
+   * El PDF firmado o la foto de verificación de una solicitud del tenant. La foto es un dato sensible:
+   * solo se sirve a quien tiene la clave del tenant dueño de la solicitud.
+   */
+  async getFile(
+    tenant: Tenant,
+    id: string,
+    kind: 'document' | 'photo',
+  ): Promise<{ bytes: Buffer; contentType: string; filename: string }> {
+    const notFound = () => new ApiError(404, 'REQUEST_NOT_FOUND', 'Solicitud no encontrada.');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw notFound();
+
+    const { rows } = await this.pool.query<{ status: RequestStatus; reference: string; pdf_path: string | null; photo_path: string | null }>(
+      `SELECT r.status, r.reference, r.pdf_path, e.photo_path
+         FROM signature_requests r
+         LEFT JOIN signature_evidence e ON e.request_id = r.id
+        WHERE r.tenant_id = $1 AND r.id = $2`,
+      [tenant.id, id],
+    );
+    const row = rows[0];
+    if (!row) throw notFound();
+
+    if (kind === 'document') {
+      if (row.status !== 'SIGNED' || !row.pdf_path) throw new ApiError(409, 'NOT_SIGNED', 'La solicitud todavía no está firmada.');
+      return { bytes: await this.storage.get(row.pdf_path), contentType: 'application/pdf', filename: `${row.reference}.pdf` };
+    }
+    if (!row.photo_path) throw new ApiError(404, 'PHOTO_NOT_FOUND', 'Esta solicitud no tiene fotografía.');
+    const bytes = await this.storage.get(row.photo_path);
+    const info = imageInfo(bytes);
+    return {
+      bytes,
+      contentType: info?.mime ?? 'application/octet-stream',
+      filename: `${row.reference}-foto.${info?.type === 'png' ? 'png' : 'jpg'}`,
+    };
   }
 
   private toSummary(r: SummaryRow): SignatureRequestSummary {

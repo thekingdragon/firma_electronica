@@ -42,6 +42,33 @@ export function seal(masterKey: Buffer, purpose: KeyPurpose, plaintext: string):
   return [VERSION, iv.toString('base64'), cipher.getAuthTag().toString('base64'), data.toString('base64')].join(':');
 }
 
+const BYTES_MAGIC = Buffer.from('FES1');
+const TAG_BYTES = 16;
+
+/**
+ * Cifra un archivo. Formato binario: `FES1` + iv (12) + tag (16) + datos. Misma garantía que
+ * `seal`: GCM autenticado, IV nuevo por archivo, subclave por propósito.
+ */
+export function sealBytes(masterKey: Buffer, purpose: KeyPurpose, plain: Buffer): Buffer {
+  const iv = randomBytes(IV_BYTES);
+  const cipher = createCipheriv(ALGORITHM, deriveKey(masterKey, purpose), iv);
+  const data = Buffer.concat([cipher.update(plain), cipher.final()]);
+  return Buffer.concat([BYTES_MAGIC, iv, cipher.getAuthTag(), data]);
+}
+
+/** Descifra un archivo. Lanza si fue alterado o si la clave o el propósito no coinciden. */
+export function openBytes(masterKey: Buffer, purpose: KeyPurpose, sealed: Buffer): Buffer {
+  const head = BYTES_MAGIC.length + IV_BYTES + TAG_BYTES;
+  if (sealed.length < head || !sealed.subarray(0, BYTES_MAGIC.length).equals(BYTES_MAGIC)) {
+    throw new Error('Archivo cifrado con formato desconocido.');
+  }
+  const iv = sealed.subarray(BYTES_MAGIC.length, BYTES_MAGIC.length + IV_BYTES);
+  const tag = sealed.subarray(BYTES_MAGIC.length + IV_BYTES, head);
+  const decipher = createDecipheriv(ALGORITHM, deriveKey(masterKey, purpose), iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(sealed.subarray(head)), decipher.final()]);
+}
+
 /** Descifra. Lanza si el valor fue alterado, si la clave o el propósito no son los que lo cifraron. */
 export function open(masterKey: Buffer, purpose: KeyPurpose, sealed: string): string {
   const parts = sealed.split(':');
