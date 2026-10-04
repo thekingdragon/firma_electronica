@@ -1,0 +1,272 @@
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { api, ApiRequestError, loadReviewer, saveReviewer, type Evidence, type ReviewResult } from '../api';
+import { useSession } from '../auth';
+import { EVENT_LABEL, REVIEW_LABEL, formatDateTime, formatDateTimeSeconds, saveBlob } from '../format';
+import { ReviewBadge } from './StatusBadge';
+
+/** Resumen corto del navegador a partir del user agent; el texto completo queda en el título. */
+function deviceOf(ua: string | null): string {
+  if (!ua) return 'desconocido';
+  const os = /Android/i.test(ua) ? 'Android' : /iPhone|iPad|iOS/i.test(ua) ? 'iOS' : /Windows/i.test(ua) ? 'Windows' : /Mac OS/i.test(ua) ? 'macOS' : /Linux/i.test(ua) ? 'Linux' : '';
+  const browser = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : '';
+  const mobile = /Mobile/i.test(ua) ? ' (móvil)' : '';
+  return [browser, os].filter(Boolean).join(' en ') + mobile || 'desconocido';
+}
+
+type PhotoState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; url: string }
+  | { kind: 'none'; message: string };
+
+/**
+ * Lo que una persona del corredor necesita para decidir si la identidad del firmante le convence:
+ * la foto, el código que debía verse en el papel y todo lo registrado. Es la revisión humana de la
+ * fase 1 (todavía no hay verificación automática del rostro).
+ */
+export function EvidencePanel({
+  requestId,
+  signerName,
+  onReviewed,
+}: {
+  requestId: string;
+  signerName: string;
+  /** Se llama al guardar un dictamen, para que la pantalla que lo contiene refresque su encabezado. */
+  onReviewed?: () => void;
+}) {
+  const { apiKey } = useSession();
+  const [ev, setEv] = useState<Evidence | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<PhotoState>({ kind: 'loading' });
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api
+      .evidence(apiKey, requestId)
+      .then(setEv)
+      .catch((e: Error) => setError(e.message));
+  }, [apiKey, requestId]);
+
+  useEffect(load, [load]);
+
+  // La foto va por fetch con la clave en una cabecera: se convierte en una URL local para mostrarla.
+  useEffect(() => {
+    if (!ev) return;
+    if (!ev.photo) {
+      setPhoto({ kind: 'none', message: 'Este documento no pidió fotografía.' });
+      return;
+    }
+    if (ev.photo.deletedAt) {
+      setPhoto({ kind: 'none', message: `La foto se borró el ${formatDateTime(ev.photo.deletedAt)} al vencer el plazo de retención. Quedan su huella y la constancia.` });
+      return;
+    }
+    let url: string | null = null;
+    let cancelled = false;
+    api
+      .photo(apiKey, requestId)
+      .then((blob) => {
+        if (cancelled) return;
+        url = URL.createObjectURL(blob);
+        setPhoto({ kind: 'ready', url });
+      })
+      .catch((e: Error) => !cancelled && setPhoto({ kind: 'none', message: e.message }));
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [apiKey, requestId, ev?.photo?.sha256, ev?.photo?.deletedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function downloadPdf() {
+    if (!ev) return;
+    setPdfBusy(true);
+    setPdfError(null);
+    try {
+      saveBlob(await api.document(apiKey, requestId), `${ev.reference}.pdf`);
+    } catch (e) {
+      setPdfError(e instanceof Error ? e.message : 'No se pudo descargar el PDF.');
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
+  if (error) return <p className="error" role="alert">{error}</p>;
+  if (!ev) return <p className="muted">Cargando la evidencia…</p>;
+
+  const ci = ev.clientInfo ?? {};
+
+  return (
+    <>
+      <div className="card">
+        <div className="card-head">
+          <h2>Documento firmado</h2>
+          <ReviewBadge review={ev.review?.result ?? null} />
+        </div>
+        <p className="muted">Firmado el {ev.signedAt ? formatDateTimeSeconds(ev.signedAt) : '—'} por {signerName}.</p>
+        <div className="actions">
+          <button type="button" className="btn btn-primary" onClick={downloadPdf} disabled={pdfBusy}>
+            {pdfBusy ? 'Descargando…' : 'Descargar PDF firmado'}
+          </button>
+        </div>
+        {pdfError && <p className="error" role="alert">{pdfError}</p>}
+        {ev.pdfSha256 && <p className="hint">SHA-256 del PDF: <code className="hash">{ev.pdfSha256}</code></p>}
+      </div>
+
+      <div className="card">
+        <h2>Revisión de identidad</h2>
+        <div className="review-grid">
+          <div>
+            {photo.kind === 'loading' && <div className="photo-box muted">Cargando la foto…</div>}
+            {photo.kind === 'ready' && <img className="photo-box" src={photo.url} alt={`Fotografía de verificación de ${signerName}`} />}
+            {photo.kind === 'none' && <div className="photo-box muted">{photo.message}</div>}
+          </div>
+          <div>
+            {ev.challenge && (
+              <div className="challenge-check">
+                <div className="muted small">Código que debía verse en el papel</div>
+                <div className="challenge-code-sm">{ev.challenge.code}</div>
+              </div>
+            )}
+            <p className="checklist-title">Antes de decidir, compruebe en la foto:</p>
+            <ul className="checklist">
+              <li>Que el <strong>rostro</strong> se vea claro y coincida con el del documento de identidad.</li>
+              <li>Que el documento sea de <strong>{ev.signer.name}</strong> ({ev.signer.documentType} {ev.signer.documentNumber}).</li>
+              {ev.challenge && <li>Que el papel muestre <strong>exactamente {ev.challenge.code}</strong>, escrito a mano.</li>}
+            </ul>
+            <p className="hint">Esta revisión es manual: el servicio todavía no compara el rostro ni lee el código automáticamente.</p>
+          </div>
+        </div>
+
+        <ReviewForm
+          requestId={requestId}
+          current={ev.review}
+          onSaved={() => {
+            load();
+            onReviewed?.();
+          }}
+        />
+      </div>
+
+      <div className="card">
+        <h2>Lo que quedó registrado</h2>
+        <dl className="details">
+          {ev.otp && (
+            <>
+              <dt>Código por correo</dt>
+              <dd>Verificado el {formatDateTimeSeconds(ev.otp.verifiedAt)} ({ev.otp.attempts} {ev.otp.attempts === 1 ? 'intento' : 'intentos'})</dd>
+            </>
+          )}
+          {ev.photo && (
+            <>
+              <dt>Fotografía</dt>
+              <dd>
+                {ev.photo.width}×{ev.photo.height} px{ev.photo.receivedAt ? `, recibida el ${formatDateTimeSeconds(ev.photo.receivedAt)}` : ''}
+                <br />
+                <code className="hash">{ev.photo.sha256}</code>
+              </dd>
+            </>
+          )}
+          <dt>Dirección IP</dt>
+          <dd>{ev.ip ?? 'desconocida'}</dd>
+          <dt>Dispositivo</dt>
+          <dd title={ev.userAgent ?? ''}>
+            {deviceOf(ev.userAgent)}
+            {typeof ci.timezone === 'string' ? ` · zona horaria ${ci.timezone}` : ''}
+            {typeof ci.screen === 'string' ? ` · pantalla ${ci.screen}` : ''}
+          </dd>
+          <dt>Facultades otorgadas</dt>
+          <dd>
+            {ev.form?.powers?.length ? ev.form.powers.join(', ') : 'Ninguna marcada'}
+            {ev.form?.observation ? <><br /><strong>Observación:</strong> {ev.form.observation}</> : null}
+          </dd>
+        </dl>
+      </div>
+
+      <details className="card events">
+        <summary>Bitácora ({ev.events.length})</summary>
+        <ol className="timeline">
+          {ev.events.map((e, i) => (
+            <li key={i}>
+              <span className="muted">{formatDateTimeSeconds(e.at)}</span> · {EVENT_LABEL[e.event] ?? e.event}
+              {e.ip ? <span className="muted"> · {e.ip}</span> : null}
+            </li>
+          ))}
+        </ol>
+      </details>
+    </>
+  );
+}
+
+function ReviewForm({ requestId, current, onSaved }: { requestId: string; current: Evidence['review']; onSaved: () => void }) {
+  const { apiKey } = useSession();
+  const [reviewer, setReviewer] = useState(loadReviewer());
+  const [result, setResult] = useState<ReviewResult | ''>('');
+  const [note, setNote] = useState('');
+  const [shown, setShown] = useState<{ reviewer?: string; result?: string }>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const missing: { reviewer?: string; result?: string } = {};
+    if (reviewer.trim().length < 2) missing.reviewer = 'Escriba su nombre: queda registrado con la revisión.';
+    if (!result) missing.result = 'Elija si la identidad queda verificada o rechazada.';
+    setShown(missing);
+    if (Object.keys(missing).length || !result) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.review(apiKey, requestId, { result, reviewedBy: reviewer.trim(), ...(note.trim() ? { note: note.trim() } : {}) });
+      saveReviewer(reviewer.trim());
+      setEditing(false);
+      setResult('');
+      setNote('');
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiRequestError || err instanceof Error ? err.message : 'No se pudo guardar la revisión.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (current && !editing) {
+    return (
+      <div className={`review-result ${current.result === 'VERIFIED' ? 'ok' : 'bad'}`}>
+        <strong>{REVIEW_LABEL[current.result]}</strong> por {current.reviewedBy} · {formatDateTime(current.reviewedAt)}
+        {current.note && <p className="review-note">«{current.note}»</p>}
+        <button type="button" className="btn btn-ghost" onClick={() => setEditing(true)}>Cambiar el dictamen</button>
+      </div>
+    );
+  }
+
+  return (
+    <form className="review-form" onSubmit={submit} noValidate>
+      <h3>{current ? 'Cambiar el dictamen' : 'Su dictamen'}</h3>
+      <label htmlFor="reviewer">Su nombre *</label>
+      <input id="reviewer" value={reviewer} className={shown.reviewer ? 'invalid' : ''} onChange={(e) => { setReviewer(e.target.value); setShown((s) => ({ ...s, reviewer: undefined })); }} />
+      {shown.reviewer && <p className="error">{shown.reviewer}</p>}
+
+      <fieldset className={`choice${shown.result ? ' invalid' : ''}`}>
+        <legend>Resultado *</legend>
+        <label className="check">
+          <input type="radio" name="result" checked={result === 'VERIFIED'} onChange={() => { setResult('VERIFIED'); setShown((s) => ({ ...s, result: undefined })); }} />
+          <span><strong>Identidad verificada</strong> — la foto, el documento y el código coinciden.</span>
+        </label>
+        <label className="check">
+          <input type="radio" name="result" checked={result === 'REJECTED'} onChange={() => { setResult('REJECTED'); setShown((s) => ({ ...s, result: undefined })); }} />
+          <span><strong>Identidad rechazada</strong> — algo no coincide o no se puede comprobar.</span>
+        </label>
+      </fieldset>
+      {shown.result && <p className="error">{shown.result}</p>}
+
+      <label htmlFor="note">Nota</label>
+      <textarea id="note" rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Por qué lo verifica o lo rechaza" />
+
+      {error && <p className="error" role="alert">{error}</p>}
+      <div className="actions">
+        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Guardando…' : 'Guardar revisión'}</button>
+        {current && <button type="button" className="btn btn-ghost" onClick={() => setEditing(false)}>Cancelar</button>}
+      </div>
+    </form>
+  );
+}

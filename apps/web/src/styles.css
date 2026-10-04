@@ -370,8 +370,10 @@ tbody tr:last-child td {
   }
   th:nth-child(3),
   td:nth-child(3),
-  th:nth-child(5),
-  td:nth-child(5) {
+  th:nth-child(6),
+  td:nth-child(6),
+  th:nth-child(7),
+  td:nth-child(7) {
     display: none;
   }
 }
@@ -516,7 +518,8 @@ tbody tr:last-child td {
   margin: 0.6rem 0;
   cursor: pointer;
 }
-.check input[type='checkbox'] {
+.check input[type='checkbox'],
+.check input[type='radio'] {
   width: 1.35rem;
   height: 1.35rem;
   flex: none;
@@ -632,4 +635,152 @@ tbody tr:last-child td {
 }
 .closed {
   text-align: center;
+}
+
+/* ===== Evidencia y revisión (detalle de una firma) ===== */
+.badge-unreviewed {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.badges {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.card-head h2 {
+  margin: 0;
+}
+.hint.block {
+  display: block;
+  font-weight: 400;
+}
+code.hash {
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+.review-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.photo-box {
+  width: 100%;
+  min-height: 12rem;
+  max-height: 24rem;
+  object-fit: contain;
+  background: #000;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  text-align: center;
+}
+div.photo-box {
+  background: var(--accent-soft);
+  color: var(--muted);
+}
+.challenge-check {
+  text-align: center;
+  background: var(--accent-soft);
+  border: 2px dashed var(--accent);
+  border-radius: 10px;
+  padding: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+.challenge-code-sm {
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: 0.3rem;
+  font-family: ui-monospace, Consolas, monospace;
+  line-height: 1.1;
+}
+.checklist-title {
+  font-weight: 600;
+  margin: 0 0 0.3rem;
+}
+.checklist {
+  margin: 0 0 0.5rem;
+  padding-left: 1.1rem;
+  font-size: 0.92rem;
+}
+.review-form {
+  margin-top: 1.25rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+}
+.review-form h3 {
+  margin: 0.75rem 0 0;
+}
+.choice {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem 0.75rem;
+  margin: 0.9rem 0 0;
+}
+.choice.invalid {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+.choice legend {
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0 0.3rem;
+}
+.review-result {
+  margin-top: 1.25rem;
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+}
+.review-result.ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.review-result.bad {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.review-note {
+  margin: 0.3rem 0;
+  color: var(--text);
+}
+.events summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.timeline {
+  margin: 0.75rem 0 0;
+  padding-left: 1.2rem;
+  font-size: 0.9rem;
+}
+.timeline li {
+  margin: 0.25rem 0;
+}
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+.btn-danger-outline {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.confirm {
+  background: var(--danger-soft);
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+}
+
+@media (max-width: 600px) {
+  .review-grid {
+    grid-template-columns: 1fr;
+  }
 }

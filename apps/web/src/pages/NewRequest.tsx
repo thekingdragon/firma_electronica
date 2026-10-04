@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { api, ApiRequestError, type CreateRequestBody } from '../api';
 import { useSession } from '../auth';
 import { LinkBox } from '../components/LinkBox';
-import { SIGNING_PAGE_READY } from '../config';
 
 type Created = Awaited<ReturnType<typeof api.create>>;
 
@@ -25,6 +24,8 @@ interface Form {
   phone: string;
   externalRef: string;
   expiresInHours: number;
+  /** El servicio envía el enlace por correo; si no, lo envía quien usa el panel (copiar o WhatsApp). */
+  sendByService: boolean;
 }
 
 const EMPTY: Form = {
@@ -36,6 +37,7 @@ const EMPTY: Form = {
   phone: '',
   externalRef: '',
   expiresInHours: 48,
+  sendByService: false,
 };
 
 /** Qué falta, por campo. El botón siempre se puede pulsar: al pulsar se marca lo que falta. */
@@ -77,7 +79,7 @@ export function NewRequest() {
       signer: { name: form.signerName.trim(), documentType: form.idType, documentNumber: form.idNumber.trim() },
       data: { insurances: form.insurances.split('\n').map((l) => l.trim()).filter(Boolean) },
       otp: { channel: 'EMAIL', to: form.email.trim() },
-      delivery: { mode: 'HOST' },
+      delivery: form.sendByService ? { mode: 'SERVICE', channel: 'EMAIL', to: form.email.trim() } : { mode: 'HOST' },
       expiresInHours: form.expiresInHours,
     };
     setBusy(true);
@@ -114,18 +116,28 @@ export function NewRequest() {
             Referencia <strong>{result.reference}</strong> · vence el{' '}
             {new Date(result.expiresAt).toLocaleString('es-PE', { dateStyle: 'medium', timeStyle: 'short' })}
           </p>
-          {!SIGNING_PAGE_READY && (
-            <p className="notice">
-              La página de firma todavía está en construcción: este enlace aún no abre. Ya queda registrada la
-              solicitud y su enlace definitivo.
-            </p>
+          {result.sentTo ? (
+            <>
+              <h2>Enlace enviado</h2>
+              <p>Enviamos el enlace por correo a <strong>{result.sentTo}</strong>.</p>
+              {result.warnings?.includes('LINK_AND_OTP_SAME_CHANNEL') && (
+                <p className="notice" role="note">
+                  <strong>Atención:</strong> el enlace y el código de verificación llegan al <strong>mismo correo</strong>. Quien
+                  abra ese buzón tendrá las dos cosas: la verificación protege menos. Para más seguridad, envíe el enlace
+                  por otro medio (WhatsApp) y deje el código por correo.
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <h2>Envíe el enlace al firmante</h2>
+              {result.signUrl && <LinkBox url={result.signUrl} signerName={signerName} phone={phone} />}
+              <p className="hint">
+                El código de verificación (OTP) lo recibirá el firmante por correo al abrir el enlace. Por seguridad no
+                se envía por el mismo medio que el enlace.
+              </p>
+            </>
           )}
-          <h2>Envíe el enlace al firmante</h2>
-          {result.signUrl && <LinkBox url={result.signUrl} signerName={signerName} phone={phone} />}
-          <p className="hint">
-            El código de verificación (OTP) lo recibirá el firmante por correo al abrir el enlace. Por seguridad no
-            se envía por el mismo medio que el enlace.
-          </p>
           <div className="actions">
             <Link className="btn" to={`/solicitudes/${result.id}`}>
               Ver detalle
@@ -191,6 +203,18 @@ export function NewRequest() {
             <label htmlFor="phone">WhatsApp del firmante</label>
             <input id="phone" type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="+51 999 999 999" />
             <p className="hint">Solo arma el botón de WhatsApp; no se guarda.</p>
+          </div>
+          <div className="span-2">
+            <label className="check">
+              <input type="checkbox" checked={form.sendByService} onChange={(e) => set('sendByService', e.target.checked)} />
+              <span>
+                <strong>Enviar el enlace por correo desde el servicio</strong>
+                <span className="hint block">
+                  Si no, usted copia el enlace o lo envía por WhatsApp. Requiere que la corredora tenga configurado su
+                  correo. Ojo: el código de verificación también llega por correo.
+                </span>
+              </span>
+            </label>
           </div>
           <div>
             <label htmlFor="externalRef">Referencia interna</label>

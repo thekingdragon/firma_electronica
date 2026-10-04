@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type RequestStatus, type SignatureRequest } from '../api';
 import { useSession } from '../auth';
-import { StatusBadge } from '../components/StatusBadge';
+import { ReviewBadge, StatusBadge } from '../components/StatusBadge';
 import { STATUS_LABEL, formatDateTime, isPast } from '../format';
 
 export function Requests() {
@@ -66,6 +66,7 @@ export function Requests() {
                 <th>Firmante</th>
                 <th>Seguros</th>
                 <th>Estado</th>
+                <th>Revisión</th>
                 <th>Creada</th>
                 <th>Vence</th>
               </tr>
@@ -81,6 +82,7 @@ export function Requests() {
                   <td>
                     <StatusBadge status={r.status} />
                   </td>
+                  <td>{r.status === 'SIGNED' ? <ReviewBadge review={r.review} /> : <span className="muted">—</span>}</td>
                   <td>{formatDateTime(r.createdAt)}</td>
                   <td className={r.status === 'PENDING' && isPast(r.expiresAt) ? 'warn' : ''}>
                     {formatDateTime(r.expiresAt)}

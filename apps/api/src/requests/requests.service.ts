@@ -46,6 +46,8 @@ export interface SignatureRequestSummary extends SignatureRequestView {
   createdAt: string;
   /** Dictamen del corredor sobre la evidencia, o `null` si aún no se revisó. */
   review: 'VERIFIED' | 'REJECTED' | null;
+  /** Quién envía el link: el host (`HOST`) o el propio servicio por correo (`SERVICE`). */
+  deliveryMode: 'HOST' | 'SERVICE';
 }
 
 interface SummaryRow extends RequestRow {
@@ -372,6 +374,7 @@ export class RequestsService {
       data: r.snapshot.data,
       createdAt: r.created_at.toISOString(),
       review: r.review_result,
+      deliveryMode: r.delivery_mode,
     };
   }
 

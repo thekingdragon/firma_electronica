@@ -332,6 +332,8 @@ describe('POST /v1/requests', () => {
       const creada = await post(keyA, validBody());
       const res = await get(keyA, `/v1/requests/${creada.body.id}`);
       expect(res.status).toBe(200);
+      expect(res.body.deliveryMode).toBe('HOST');
+      expect(res.body.review).toBeNull();
       expect(res.body.signerName).toBe('Ana Pérez Quispe');
       expect(res.body.data).toEqual({ insurances: ['SCTR Salud', 'SCTR Pensión'] });
       expect(res.body.signUrl).toBe(creada.body.signUrl);

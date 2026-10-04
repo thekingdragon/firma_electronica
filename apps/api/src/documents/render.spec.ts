@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto';
-import { PDFDocument } from 'pdf-lib';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
 import { defaultTemplates } from '../tenants/default-templates';
 import { makePng } from './image-fixtures';
+import { imageInfo } from './image-info';
 import { UnsupportedDocumentTypeError, renderDocument, resolveContent } from './render';
 import type { RenderInput } from './types';
 
@@ -103,6 +106,57 @@ describe('renderDocument (APPOINTMENT_LETTER)', () => {
     expect(f.measureLines('uno\n\ndos')).toEqual(['uno', '', 'dos']);
     // Y lo que la fuente no soporta sí se limpia, sin tocar los saltos.
     expect(f.measureLines('ok 😀\nfin')).toEqual(['ok ?', 'fin']);
+  });
+
+  describe('con una foto JPEG REAL (la que entrega la cámara del navegador)', () => {
+    // La cámara produce JPEG, no PNG: esta es la ruta de producción. Antes solo se probaba con PNG
+    // sintéticos y un defecto con los JPEG pasó inadvertido hasta verlo firmar de verdad.
+    const jpeg = readFileSync(join(__dirname, 'fixtures', 'camera-1280x720.jpg'));
+    const withPhoto = (bytes: Buffer): Partial<RenderInput> => ({
+      evidence: {
+        ip: '203.0.113.7',
+        otpVerifiedAt: new Date(Date.UTC(2026, 9, 4, 17, 34, 40)),
+        challengeCode: '4821',
+        photo: { bytes, type: 'jpeg', width: 1280, height: 720, sha256: createHash('sha256').update(bytes).digest('hex') },
+      },
+    });
+
+    /** Los bytes de las imágenes JPEG (DCTDecode) que el PDF lleva incrustadas, tal cual. */
+    async function embeddedJpegs(pdf: Uint8Array): Promise<Buffer[]> {
+      const doc = await PDFDocument.load(pdf);
+      const out: Buffer[] = [];
+      for (const [, obj] of doc.context.enumerateIndirectObjects()) {
+        if (obj instanceof PDFRawStream && obj.dict.get(PDFName.of('Filter'))?.toString() === '/DCTDecode') {
+          out.push(Buffer.from(obj.contents));
+        }
+      }
+      return out;
+    }
+
+    it('el lector de dimensiones lee un JPEG de verdad, no solo la cabecera armada a mano', () => {
+      expect(imageInfo(jpeg)).toEqual({ type: 'jpeg', mime: 'image/jpeg', width: 1280, height: 720 });
+    });
+
+    it('genera el PDF y la imagen incrustada es EXACTAMENTE la foto, sin recomprimir', async () => {
+      const pdf = await renderDocument('APPOINTMENT_LETTER', input(withPhoto(jpeg)));
+      const imgs = await embeddedJpegs(pdf);
+      expect(imgs).toHaveLength(1);
+      expect(imgs[0].equals(jpeg)).toBe(true);
+    });
+
+    it('REGRESIÓN: un Buffer que es una PORCIÓN de un bloque mayor también funciona', async () => {
+      // multer y Node entregan así los buffers según cómo caiga la asignación de memoria. pdf-lib los
+      // rechazaba con «SOI not found in JPEG», y fallaba solo a veces: no se veía en las pruebas.
+      for (const offset of [1, 100, 4096, 8191]) {
+        const grande = Buffer.concat([Buffer.alloc(offset, 7), jpeg, Buffer.alloc(offset, 9)]);
+        const porcion = grande.subarray(offset, offset + jpeg.length);
+        expect(porcion.byteOffset).toBeGreaterThan(0);
+        const pdf = await renderDocument('APPOINTMENT_LETTER', input(withPhoto(porcion)));
+        const imgs = await embeddedJpegs(pdf);
+        expect(imgs).toHaveLength(1);
+        expect(imgs[0].equals(jpeg)).toBe(true);
+      }
+    });
   });
 
   describe('resolveContent', () => {

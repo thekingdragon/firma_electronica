@@ -122,7 +122,11 @@ export const renderAppointmentLetter: DocumentRenderer = async (input: RenderInp
     const ph = input.evidence.photo;
     f.field('Fotografía de verificación:', `${ph.width}×${ph.height} px · SHA-256 ${ph.sha256}`);
     f.gap(4);
-    const img = ph.type === 'png' ? await doc.embedPng(ph.bytes) : await doc.embedJpg(ph.bytes);
+    // Copia EXACTA en un Uint8Array propio: pdf-lib lee mal un Buffer de Node que es una porción de un
+    // bloque de memoria mayor (como los que entrega multer) y lo rechaza con «SOI not found in JPEG».
+    // Fallaba solo a veces, según cómo se asignara la memoria.
+    const bytes = new Uint8Array(ph.bytes);
+    const img = ph.type === 'png' ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
     f.image(img, 170, 130);
   }
 

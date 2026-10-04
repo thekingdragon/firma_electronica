@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, ApiRequestError, type SignatureRequest } from '../api';
 import { useSession } from '../auth';
+import { EvidencePanel } from '../components/EvidencePanel';
 import { LinkBox } from '../components/LinkBox';
-import { StatusBadge } from '../components/StatusBadge';
-import { SIGNING_PAGE_READY } from '../config';
+import { ReviewBadge, StatusBadge } from '../components/StatusBadge';
 import { DOCUMENT_TYPE_LABEL, formatDateTime, isPast } from '../format';
 
 export function RequestDetail() {
@@ -13,16 +13,18 @@ export function RequestDetail() {
   const [req, setReq] = useState<SignatureRequest | null>(null);
   const [error, setError] = useState<{ notFound: boolean; message: string } | null>(null);
 
-  useEffect(() => {
-    setReq(null);
-    setError(null);
+  const load = useCallback(() => {
     api
       .get(apiKey, id)
       .then(setReq)
-      .catch((e: Error) =>
-        setError({ notFound: e instanceof ApiRequestError && e.status === 404, message: e.message }),
-      );
+      .catch((e: Error) => setError({ notFound: e instanceof ApiRequestError && e.status === 404, message: e.message }));
   }, [apiKey, id]);
+
+  useEffect(() => {
+    setReq(null);
+    setError(null);
+    load();
+  }, [load]);
 
   if (error) {
     return (
@@ -43,7 +45,10 @@ export function RequestDetail() {
       </p>
       <div className="page-head">
         <h1>{req.reference}</h1>
-        <StatusBadge status={req.status} />
+        <div className="badges">
+          <StatusBadge status={req.status} />
+          {req.status === 'SIGNED' && <ReviewBadge review={req.review} />}
+        </div>
       </div>
 
       <div className="card">
@@ -73,24 +78,68 @@ export function RequestDetail() {
             {formatDateTime(req.expiresAt)}
             {expired && ' · el enlace venció'}
           </dd>
-          {req.signedAt && (
-            <>
-              <dt>Firmada</dt>
-              <dd>{formatDateTime(req.signedAt)}</dd>
-            </>
-          )}
         </dl>
       </div>
 
-      {req.status === 'PENDING' && req.signUrl && !expired && (
-        <div className="card">
-          <h2>Enlace de firma</h2>
-          {!SIGNING_PAGE_READY && (
-            <p className="notice">La página de firma todavía está en construcción: este enlace aún no abre.</p>
-          )}
-          <LinkBox url={req.signUrl} signerName={req.signerName} />
+      {req.status === 'PENDING' && !expired && (
+        <>
+          <div className="card">
+            <h2>Enlace de firma</h2>
+            {req.deliveryMode === 'SERVICE' ? (
+              <p>El enlace se envió por correo al firmante. Si no le llegó, revoque esta solicitud y cree otra.</p>
+            ) : req.signUrl ? (
+              <LinkBox url={req.signUrl} signerName={req.signerName} />
+            ) : null}
+          </div>
+          <RevokeCard requestId={req.id} onRevoked={load} />
+        </>
+      )}
+
+      {req.status === 'REVOKED' && <p className="notice">Esta solicitud se revocó: su enlace ya no abre.</p>}
+      {req.status === 'EXPIRED' && <p className="notice">Esta solicitud venció sin firmarse. Cree una nueva.</p>}
+
+      {req.status === 'SIGNED' && <EvidencePanel requestId={req.id} signerName={req.signerName} onReviewed={load} />}
+    </>
+  );
+}
+
+/** Revocar pide confirmación: es irreversible (el enlace deja de abrir y la solicitud no se reabre). */
+function RevokeCard({ requestId, onRevoked }: { requestId: string; onRevoked: () => void }) {
+  const { apiKey } = useSession();
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function revoke() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.revoke(apiKey, requestId);
+      onRevoked();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo revocar.');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2>Revocar</h2>
+      {!asking ? (
+        <>
+          <p className="muted">Si el enlace se envió a la persona equivocada o ya no se necesita, revóquelo: dejará de abrir.</p>
+          <button type="button" className="btn btn-danger-outline" onClick={() => setAsking(true)}>Revocar solicitud</button>
+        </>
+      ) : (
+        <div className="confirm" role="alertdialog" aria-label="Confirmar revocación">
+          <p><strong>¿Revocar esta solicitud?</strong> El enlace dejará de funcionar y no se puede deshacer.</p>
+          {error && <p className="error" role="alert">{error}</p>}
+          <div className="actions">
+            <button type="button" className="btn btn-danger" onClick={revoke} disabled={busy}>{busy ? 'Revocando…' : 'Sí, revocar'}</button>
+            <button type="button" className="btn btn-ghost" onClick={() => setAsking(false)} disabled={busy}>Cancelar</button>
+          </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

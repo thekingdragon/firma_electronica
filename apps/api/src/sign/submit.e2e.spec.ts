@@ -4,6 +4,7 @@
  */
 import { INestApplication } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -291,6 +292,26 @@ describe('firma: foto, envío y evidencia', () => {
       const r = await http().get(`/v1/sign/${s.token}/document`).set('X-Session', s.session);
       expect(r.status).toBe(409);
       expect(r.body.code).toBe('NOT_SIGNED');
+    });
+
+    it('firma con una foto JPEG REAL (la que entrega la cámara del navegador) y la guarda tal cual', async () => {
+      // La cámara produce JPEG. El resto de las pruebas usan PNG sintéticos; un defecto de la ruta JPEG
+      // solo apareció al firmar de verdad en el navegador (500 «SOI not found in JPEG»).
+      const jpeg = readFileSync(join(__dirname, '..', 'documents', 'fixtures', 'camera-1280x720.jpg'));
+      for (let i = 0; i < 5; i++) {
+        const s = await conSesion();
+        const d = await desafio(s);
+        const res = await enviar(s, { challengeId: d.challengeId, photo: jpeg });
+        expect(res.status).toBe(200);
+
+        const path = (await pool.query('SELECT photo_path FROM signature_evidence WHERE request_id=$1', [s.id])).rows[0].photo_path;
+        expect((await storage.get(path)).equals(jpeg)).toBe(true);
+        const foto = await http().get(`/v1/requests/${s.id}/photo`).set('X-Api-Key', tenants['Firma'].key);
+        expect(foto.headers['content-type']).toBe('image/jpeg');
+        expect(Buffer.from(foto.body).equals(jpeg)).toBe(true);
+        const pdf = await http().get(`/v1/requests/${s.id}/document`).set('X-Api-Key', tenants['Firma'].key);
+        expect((await PDFDocument.load(pdf.body)).getPages().length).toBeGreaterThanOrEqual(2);
+      }
     });
 
     it('guarda los datos informativos del navegador y descarta los que no son válidos', async () => {
