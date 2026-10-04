@@ -8,10 +8,13 @@ import { randomCode, sha256Hex, signTokenFor } from '../common/crypto';
 import { AppConfig, APP_CONFIG } from '../config/config';
 import { PG_POOL } from '../db/db.module';
 import { imageInfo } from '../documents/image-info';
+import { MailNotConfiguredError, MailSendError, MailService } from '../mail/mail.service';
+import { maskEmail } from '../sign/otp';
 import { StorageService } from '../storage/storage.service';
 import { Tenant } from '../tenants/tenants.service';
 import {
   AVAILABLE_CHANNELS,
+  Channel,
   CreateRequestInput,
   createRequestSchema,
   isValidContact,
@@ -26,6 +29,10 @@ export interface SignatureRequestView {
   status: RequestStatus;
   /** Solo con delivery.mode=HOST: el host es quien envía el link. */
   signUrl?: string;
+  /** Solo con delivery.mode=SERVICE: dirección (enmascarada) a la que el servicio envió el link. */
+  sentTo?: string;
+  /** Avisos que no impiden crear la solicitud pero el host debería conocer. */
+  warnings?: string[];
   expiresAt: string;
   signedAt: string | null;
 }
@@ -89,6 +96,7 @@ export class RequestsService {
     @Inject(PG_POOL) private readonly pool: Pool,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly storage: StorageService,
+    private readonly mail: MailService,
   ) {}
 
   /** Valida el cuerpo crudo; devuelve el input listo o lanza 422 con el detalle por campo. */
@@ -169,54 +177,114 @@ export class RequestsService {
       if (existing) return this.replay(existing, snapshotSha);
     }
 
+    // El envío del link por el servicio necesita el correo del tenant: se comprueba ANTES de crear nada.
+    const byService = input.delivery.mode === 'SERVICE';
+    if (byService && !(await this.mail.isConfigured(tenant.id))) {
+      throw new ApiError(
+        409,
+        'MAIL_NOT_CONFIGURED',
+        'El tenant no tiene correo configurado: no se puede enviar el link desde el servicio. Use delivery.mode=HOST o configure el correo.',
+      );
+    }
+
     // 5. Insertar. La referencia es legible y única por tenant; ante una colisión (rarísima) se
     //    reintenta con otra. Una carrera por la misma Idempotency-Key se resuelve como replay.
+    //    Todo en una transacción: si el envío del link falla, la solicitud NO queda creada, y el host
+    //    puede reintentar con la misma Idempotency-Key sin dejar solicitudes huérfanas.
     const id = randomUUID();
     const token = signTokenFor(id, this.config.tokenSecret);
-    for (let intento = 0; intento < 5; intento++) {
-      const reference = `FE-${new Date().getUTCFullYear()}-${randomCode(8)}`;
-      try {
-        const { rows } = await this.pool.query<RequestRow>(
-          `INSERT INTO signature_requests
-             (id, tenant_id, document_type, template_id, reference, external_ref, idempotency_key,
-              snapshot, snapshot_sha256, otp_channel, otp_to, delivery_mode, delivery_channel,
-              delivery_to, token_hash, webhook_url, expires_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-                   now() + make_interval(hours => $17))
-           RETURNING id, document_type, reference, status, snapshot_sha256, delivery_mode,
-                     expires_at, signed_at`,
-          [
-            id,
-            tenant.id,
-            input.documentType,
-            template.id,
-            reference,
-            input.externalRef,
-            idempotencyKey ?? null,
-            JSON.stringify(snapshot),
-            snapshotSha,
-            input.otp?.channel ?? null,
-            input.otp?.to ?? null,
-            input.delivery.mode,
-            input.delivery.channel ?? null,
-            input.delivery.to ?? null,
-            sha256Hex(token),
-            input.webhookUrl ?? null,
-            input.expiresInHours,
-          ],
-        );
-        return { view: this.toView(rows[0]), replay: false };
-      } catch (e) {
-        const err = e as { code?: string; constraint?: string };
-        if (err.code === '23505' && err.constraint === UQ_REFERENCE) continue;
-        if (err.code === '23505' && err.constraint === UQ_IDEMPOTENCY && idempotencyKey !== undefined) {
-          const existing = await this.findByIdempotencyKey(tenant.id, idempotencyKey);
-          if (existing) return this.replay(existing, snapshotSha);
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (let intento = 0; intento < 5; intento++) {
+        const reference = `FE-${new Date().getUTCFullYear()}-${randomCode(8)}`;
+        await client.query('SAVEPOINT insertar');
+        try {
+          const { rows } = await client.query<RequestRow>(
+            `INSERT INTO signature_requests
+               (id, tenant_id, document_type, template_id, reference, external_ref, idempotency_key,
+                snapshot, snapshot_sha256, otp_channel, otp_to, delivery_mode, delivery_channel,
+                delivery_to, token_hash, webhook_url, expires_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+                     now() + make_interval(hours => $17))
+             RETURNING id, document_type, reference, status, snapshot_sha256, delivery_mode,
+                       expires_at, signed_at`,
+            [
+              id,
+              tenant.id,
+              input.documentType,
+              template.id,
+              reference,
+              input.externalRef,
+              idempotencyKey ?? null,
+              JSON.stringify(snapshot),
+              snapshotSha,
+              input.otp?.channel ?? null,
+              input.otp?.to ?? null,
+              input.delivery.mode,
+              input.delivery.channel ?? null,
+              input.delivery.to ?? null,
+              sha256Hex(token),
+              input.webhookUrl ?? null,
+              input.expiresInHours,
+            ],
+          );
+          await client.query('RELEASE SAVEPOINT insertar');
+
+          const view = this.toView(rows[0]);
+          if (byService) {
+            await this.sendLink(tenant, input, rows[0], token);
+            view.sentTo = maskEmail(input.delivery.to as string);
+          }
+          // Mismo buzón para el link y para el código: quien lo abra tiene los dos factores.
+          if (byService && input.otp && input.otp.to.toLowerCase() === (input.delivery.to ?? '').toLowerCase()) {
+            view.warnings = ['LINK_AND_OTP_SAME_CHANNEL'];
+          }
+          await client.query('COMMIT');
+          return { view, replay: false };
+        } catch (e) {
+          const err = e as { code?: string; constraint?: string };
+          if (err.code === '23505' && err.constraint === UQ_REFERENCE) {
+            await client.query('ROLLBACK TO SAVEPOINT insertar');
+            continue;
+          }
+          await client.query('ROLLBACK').catch(() => undefined);
+          if (err.code === '23505' && err.constraint === UQ_IDEMPOTENCY && idempotencyKey !== undefined) {
+            const existing = await this.findByIdempotencyKey(tenant.id, idempotencyKey);
+            if (existing) return this.replay(existing, snapshotSha);
+          }
+          throw e;
         }
-        throw e;
       }
+      await client.query('ROLLBACK').catch(() => undefined);
+    } finally {
+      client.release();
     }
     throw new ApiError(503, 'REFERENCE_UNAVAILABLE', 'No se pudo generar una referencia única; reintente.');
+  }
+
+  /** Envía el link de firma por correo, desde el servidor SMTP del tenant. Un fallo aborta la creación. */
+  private async sendLink(tenant: Tenant, input: CreateRequestInput, row: RequestRow, token: string): Promise<void> {
+    const url = `${this.config.publicBaseUrl}/s/${token}`;
+    const vence = row.expires_at.toLocaleString('es-PE', { dateStyle: 'long', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC';
+    const text =
+      `Hola ${input.signer.name},\n\n` +
+      `${tenant.legalName} le envió un documento para firmar electrónicamente (ref. ${row.reference}).\n\n` +
+      `Ábralo aquí: ${url}\n\n` +
+      `El enlace vence el ${vence}. Si usted no esperaba este mensaje, ignórelo.`;
+    try {
+      await this.mail.send(tenant.id, {
+        to: input.delivery.to as string,
+        subject: `${tenant.legalName} le envió un documento para firmar`,
+        text,
+      });
+    } catch (e) {
+      if (e instanceof MailSendError || e instanceof MailNotConfiguredError) {
+        // El detalle técnico ya quedó en tenant_mail_settings.last_error; al host se le da la explicación accionable.
+        throw new ApiError(502, 'MAIL_SEND_FAILED', `No se pudo enviar el link por correo: ${e.message}`);
+      }
+      throw e;
+    }
   }
 
   /** Solicitudes del tenant, las más nuevas primero. Nunca devuelve las de otro tenant. */
@@ -329,8 +397,14 @@ export class RequestsService {
         fail('INVALID_DELIVERY', 'delivery.channel y delivery.to solo aplican con mode=SERVICE.');
       }
     } else {
-      // El envío por el servicio necesita el SMTP del tenant, que llega en un paso posterior de M1.
-      fail('CHANNEL_NOT_AVAILABLE', 'El envío del link por el servicio todavía no está disponible: use delivery.mode=HOST.');
+      const { channel, to } = input.delivery;
+      if (!channel || !to) fail('INVALID_DELIVERY', 'Con mode=SERVICE indique delivery.channel y delivery.to.');
+      if (!AVAILABLE_CHANNELS.includes(channel as Channel)) {
+        fail('CHANNEL_NOT_AVAILABLE', `El canal ${channel} todavía no está disponible para enviar el link.`);
+      }
+      if (!isValidContact(channel as Channel, to as string)) {
+        fail('INVALID_CONTACT', `delivery.to no tiene el formato de un canal ${channel}.`);
+      }
     }
 
     if (input.webhookUrl) {

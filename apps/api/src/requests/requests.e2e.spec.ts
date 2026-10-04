@@ -49,6 +49,7 @@ describe('POST /v1/requests', () => {
     process.env.PUBLIC_BASE_URL = BASE_URL;
     process.env.NODE_ENV = 'test';
     process.env.BACKGROUND_JOBS = 'false';
+    process.env.PUBLIC_RATE_LIMIT_PER_MIN = '100000';
 
     await applyMigrations(TEST_URL!, join(__dirname, '..', '..', 'migrations'));
     pool = new Pool({ connectionString: TEST_URL });
@@ -209,10 +210,13 @@ describe('POST /v1/requests', () => {
       expect(res.body.code).toBe('CHANNEL_NOT_AVAILABLE');
     });
 
-    it('envío por el servicio (aún no disponible) -> 422', async () => {
+    it('envío del link por el servicio sin correo configurado en el tenant -> 409 y no se crea nada', async () => {
+      const antes = await pool.query('SELECT count(*)::int AS n FROM signature_requests');
       const res = await post(keyA, { ...validBody(), delivery: { mode: 'SERVICE', channel: 'EMAIL', to: 'a@b.co' } });
-      expect(res.status).toBe(422);
-      expect(res.body.code).toBe('CHANNEL_NOT_AVAILABLE');
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('MAIL_NOT_CONFIGURED');
+      const despues = await pool.query('SELECT count(*)::int AS n FROM signature_requests');
+      expect(despues.rows[0].n).toBe(antes.rows[0].n);
     });
 
     it('delivery HOST con channel -> 422', async () => {

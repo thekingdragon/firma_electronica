@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { AddressInfo } from 'node:net';
 import { Pool } from 'pg';
 import { SMTPServer } from 'smtp-server';
+import { configureApp } from './app.setup';
 import { applyMigrations } from './db/migrations';
 
 export function testDatabaseUrl(): string {
@@ -34,7 +35,9 @@ export async function resetDatabase(url: string): Promise<Pool> {
  */
 export async function makeApp(env: Record<string, string>): Promise<INestApplication> {
   // Las tareas automáticas se apagan: las pruebas las invocan a mano para controlar el momento.
-  env = { BACKGROUND_JOBS: 'false', ...env };
+  // El límite por IP se sube muchísimo: las pruebas hacen cientos de peticiones desde la misma
+  // dirección. Solo las pruebas del propio limitador usan uno bajo.
+  env = { BACKGROUND_JOBS: 'false', PUBLIC_RATE_LIMIT_PER_MIN: '100000', ...env };
   const saved: Record<string, string | undefined> = {};
   for (const [k, v] of Object.entries(env)) {
     saved[k] = process.env[k];
@@ -44,6 +47,7 @@ export async function makeApp(env: Record<string, string>): Promise<INestApplica
     const { AppModule } = await import('./app.module');
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
     const app = mod.createNestApplication();
+    configureApp(app); // la MISMA configuración que usa main.ts
     await app.init();
     return app;
   } finally {

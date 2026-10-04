@@ -9,11 +9,13 @@ import {
   Req,
   Res,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import { memoryStorage } from 'multer';
+import { PublicRateLimitGuard, RateBucketOf } from '../common/rate-limit';
 import { PHOTO_POLICY } from './photo';
 import { ClientContext, SignIntro, SigningView, SignService } from './sign.service';
 import { SubmitResult, SubmitService } from './submit.service';
@@ -25,6 +27,7 @@ const ctxOf = (req: Request): ClientContext => ({
 
 /** Endpoints públicos: se protegen con el token del link, el OTP y la sesión; no con clave de API. */
 @Controller('v1/sign/:token')
+@UseGuards(PublicRateLimitGuard)
 export class SignController {
   constructor(
     private readonly sign: SignService,
@@ -37,12 +40,14 @@ export class SignController {
   }
 
   @Post('otp')
+  @RateBucketOf('otp')
   @HttpCode(200)
   otp(@Param('token') token: string, @Req() req: Request) {
     return this.sign.requestOtp(token, ctxOf(req));
   }
 
   @Post('verify')
+  @RateBucketOf('verify')
   @HttpCode(200)
   verify(@Param('token') token: string, @Body() body: { code?: unknown } | undefined, @Req() req: Request) {
     const code = typeof body?.code === 'string' ? body.code : undefined;
@@ -55,12 +60,14 @@ export class SignController {
   }
 
   @Post('photo-challenge')
+  @RateBucketOf('challenge')
   @HttpCode(200)
   photoChallenge(@Param('token') token: string, @Headers('x-session') session: string | undefined, @Req() req: Request) {
     return this.submitService.issueChallenge(token, session, ctxOf(req));
   }
 
   @Post('submit')
+  @RateBucketOf('submit')
   @HttpCode(200)
   @UseInterceptors(
     FileInterceptor('photo', {
