@@ -11,7 +11,7 @@ datos y recibe un webhook cuando el firmante firma. No lee la base del host.
 ## Estado
 
 **M0 — diseño.** Aún no hay código ejecutable. Ver [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md),
-[docs/openapi.yaml](docs/openapi.yaml) y [migrations/0000_inicial.sql](migrations/0000_inicial.sql) (el SQL se validó
+[docs/openapi.yaml](docs/openapi.yaml) y [apps/api/migrations/0000_inicial.sql](apps/api/migrations/0000_inicial.sql) (el SQL se validó
 contra un Postgres temporal: crea las 9 tablas sin errores).
 
 ## ⚠️ No usar con clientes reales todavía
@@ -37,4 +37,4 @@ hecha con este servicio debe darse por válida ante la SBS.
   - **M2** página de firma: OTP, cámara, desafío, formulario.
   - **M3** módulo de integración en `gestor_segurov3`.
   - **M4** endurecimiento y piloto.
-- Las migraciones se escriben a mano en SQL y llevan número correlativo en `migrations/`.
+- Las migraciones se escriben a mano en SQL y llevan número correlativo en `apps/api/migrations/`.

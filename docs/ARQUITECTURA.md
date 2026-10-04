@@ -17,7 +17,7 @@
 
 ## 2. Pila
 
-NestJS + PostgreSQL (SQL a mano, ver `migrations/`), `pdf-lib` para el PDF, SPA mínima
+NestJS + PostgreSQL (SQL a mano, ver `apps/api/migrations/`), `pdf-lib` para el PDF, SPA mínima
 React/Vite para la página de firma servida por el propio servicio. Almacenamiento con proveedor
 intercambiable (disco local o S3). Cola (BullMQ + Redis) para webhooks con reintento y para
 expirar solicitudes.
@@ -162,3 +162,19 @@ desplegado.
 - Plazo de retención de la foto.
 - Fase 2: modelo propio vs proveedor para prueba de vida y comparación facial; vía de acceso al
   RENIEC para un corredor (sin investigar).
+
+## 12. Superficies y estructura del repo
+
+Monorepo (`apps/*`), independiente de cualquier host:
+
+1. **`apps/api`** — API para hosts (`X-Api-Key`). Es lo único de M1.
+2. **`apps/web`** — a partir de M2: la **página pública de firma** y, después (M2.5), un **panel
+   propio** para quien use el servicio sin un sistema detrás: login, listar y crear solicitudes,
+   enviar el link (correo, o enlace `wa.me` con el mensaje prellenado para WhatsApp, sin proveedor
+   de pago), revocar, descargar PDF y **revisar la foto** (la revisión humana de la fase 1 necesita
+   dónde vivir cuando no hay host).
+
+Decisión: el panel vive en este repo y **solo llama a la capa de servicios de la API**, nunca a la
+base por su cuenta. Así la API y el panel comparten una sola lógica y, si un día se quiere separar
+el panel, el límite ya está limpio. El panel no se construye antes de que exista la página de
+firma: sin ella no tiene nada que enviar. Gestión de usuarios y roles avanzados, después.
