@@ -16,7 +16,7 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_BYTES = 12; // el tamaño que recomienda GCM
 const KEY_BYTES = 32;
 
-export type KeyPurpose = 'smtp-password' | 'files';
+export type KeyPurpose = 'smtp-password' | 'files' | 'webhook-secret';
 
 /** Acepta base64 o hexadecimal de 32 bytes: es la clase de variable que se copia entre entornos. */
 export function parseSecretsKey(raw: string): Buffer {

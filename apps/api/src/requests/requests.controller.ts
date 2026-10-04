@@ -14,13 +14,17 @@ import type { Response } from 'express';
 import { ApiError } from '../common/api-error';
 import { ApiKeyGuard, CurrentTenant } from '../tenants/api-key.guard';
 import type { Tenant } from '../tenants/tenants.service';
+import { EvidenceView, RequestActionsService } from './request-actions.service';
 import { REQUEST_STATUSES, RequestStatus } from './request-status';
 import { RequestsService, SignatureRequestSummary, SignatureRequestView } from './requests.service';
 
 @Controller('v1/requests')
 @UseGuards(ApiKeyGuard)
 export class RequestsController {
-  constructor(private readonly requests: RequestsService) {}
+  constructor(
+    private readonly requests: RequestsService,
+    private readonly actions: RequestActionsService,
+  ) {}
 
   @Post()
   @HttpCode(201)
@@ -51,6 +55,26 @@ export class RequestsController {
       throw new ApiError(422, 'VALIDATION_ERROR', 'limit debe ser un entero entre 1 y 100.');
     }
     return { items: await this.requests.list(tenant, { status: status as RequestStatus | undefined, limit: n }) };
+  }
+
+  /** Revoca una solicitud pendiente: el link deja de abrir. Avisa al host (signature.revoked). */
+  @Post(':id/revoke')
+  @HttpCode(200)
+  revoke(@CurrentTenant() tenant: Tenant, @Param('id') id: string) {
+    return this.actions.revoke(tenant, id);
+  }
+
+  /** Todo lo registrado de una firma, para la revisión humana. */
+  @Get(':id/evidence')
+  evidence(@CurrentTenant() tenant: Tenant, @Param('id') id: string): Promise<EvidenceView> {
+    return this.actions.evidence(tenant, id);
+  }
+
+  /** Dictamen del corredor sobre la evidencia (VERIFIED o REJECTED). Avisa al host (signature.reviewed). */
+  @Post(':id/review')
+  @HttpCode(200)
+  review(@CurrentTenant() tenant: Tenant, @Param('id') id: string, @Body() body: unknown) {
+    return this.actions.review(tenant, id, body);
   }
 
   @Get(':id/document')

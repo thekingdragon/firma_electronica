@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
+import { seal } from '../common/secret-box';
 import { PG_POOL } from '../db/db.module';
 import { generateApiKey, hashApiKey, looksLikeApiKey } from './api-key';
 import { defaultTemplates } from './default-templates';
@@ -26,7 +27,8 @@ export interface CreatedTenant {
   tenant: Tenant;
   /** Se muestra una sola vez: en la base solo queda su hash. */
   apiKey: string;
-  webhookSecret: string;
+  /** Secreto para verificar los webhooks. `null` si no hubo SECRETS_KEY para cifrarlo (configurar con tenant:webhook). */
+  webhookSecret: string | null;
 }
 
 interface TenantRow {
@@ -51,14 +53,18 @@ const toTenant = (r: TenantRow): Tenant => ({
  * Crea un tenant con su clave de API y le deja activas las plantillas de partida.
  * Recibe el pool (no depende de Nest) para poder usarse desde el comando de alta y desde pruebas.
  */
-export async function createTenant(pool: Pool, input: CreateTenantInput): Promise<CreatedTenant> {
+export async function createTenant(
+  pool: Pool,
+  input: CreateTenantInput,
+  secretsKey: Buffer | null = null,
+): Promise<CreatedTenant> {
   const apiKey = generateApiKey();
-  const webhookSecret = randomBytes(32).toString('base64url');
+  const webhookSecret = secretsKey ? generateWebhookSecret() : null;
   const client: PoolClient = await pool.connect();
   try {
     await client.query('BEGIN');
     const { rows } = await client.query<TenantRow>(
-      `INSERT INTO tenants (name, country, api_key_hash, webhook_url, webhook_secret, legal_name, registry_code)
+      `INSERT INTO tenants (name, country, api_key_hash, webhook_url, webhook_secret_enc, legal_name, registry_code)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, name, country, legal_name, registry_code, webhook_url`,
       [
@@ -66,7 +72,7 @@ export async function createTenant(pool: Pool, input: CreateTenantInput): Promis
         input.country.toUpperCase(),
         hashApiKey(apiKey),
         input.webhookUrl ?? null,
-        webhookSecret,
+        secretsKey && webhookSecret ? seal(secretsKey, 'webhook-secret', webhookSecret) : null,
         input.legalName,
         input.registryCode ?? null,
       ],
@@ -98,6 +104,30 @@ export async function createTenant(pool: Pool, input: CreateTenantInput): Promis
   } finally {
     client.release();
   }
+}
+
+export const generateWebhookSecret = (): string => 'whsec_' + randomBytes(32).toString('base64url');
+
+/**
+ * Configura el webhook de un tenant: la URL y, si `rotateSecret`, un secreto NUEVO (cifrado). Devuelve
+ * el secreto en claro UNA vez; el anterior deja de servir de inmediato.
+ */
+export async function setTenantWebhook(
+  pool: Pool,
+  secretsKey: Buffer,
+  tenantId: string,
+  opts: { url?: string | null; rotateSecret: boolean },
+): Promise<{ secret: string | null }> {
+  const secret = opts.rotateSecret ? generateWebhookSecret() : null;
+  const { rowCount } = await pool.query(
+    `UPDATE tenants SET
+       webhook_url = CASE WHEN $2::boolean THEN $3 ELSE webhook_url END,
+       webhook_secret_enc = COALESCE($4, webhook_secret_enc)
+     WHERE id = $1`,
+    [tenantId, opts.url !== undefined, opts.url ?? null, secret ? seal(secretsKey, 'webhook-secret', secret) : null],
+  );
+  if (!rowCount) throw new Error(`No existe el tenant ${tenantId}.`);
+  return { secret };
 }
 
 @Injectable()

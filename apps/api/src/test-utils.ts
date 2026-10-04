@@ -33,6 +33,8 @@ export async function resetDatabase(url: string): Promise<Pool> {
  * compilarse, así que se pueden tener dos instancias con configuraciones distintas.
  */
 export async function makeApp(env: Record<string, string>): Promise<INestApplication> {
+  // Las tareas automáticas se apagan: las pruebas las invocan a mano para controlar el momento.
+  env = { BACKGROUND_JOBS: 'false', ...env };
   const saved: Record<string, string | undefined> = {};
   for (const [k, v] of Object.entries(env)) {
     saved[k] = process.env[k];

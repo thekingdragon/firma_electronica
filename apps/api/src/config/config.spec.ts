@@ -46,6 +46,33 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...base, ALLOW_DEV_OTP: 'yes' })).toThrow();
   });
 
+  it('WEBHOOK_ALLOW_PRIVATE funciona en desarrollo y se niega en producción', () => {
+    expect(loadConfig({ ...base, WEBHOOK_ALLOW_PRIVATE: 'true' }).webhookAllowPrivate).toBe(true);
+    expect(loadConfig(base).webhookAllowPrivate).toBe(false);
+    expect(() => loadConfig({ ...base, NODE_ENV: 'production', WEBHOOK_ALLOW_PRIVATE: 'true' })).toThrow(
+      /WEBHOOK_ALLOW_PRIVATE/,
+    );
+  });
+
+  it('las tareas en segundo plano están activas por defecto y se pueden apagar', () => {
+    expect(loadConfig(base).backgroundJobs).toBe(true);
+    expect(loadConfig({ ...base, BACKGROUND_JOBS: 'false' }).backgroundJobs).toBe(false);
+    expect(() => loadConfig({ ...base, BACKGROUND_JOBS: '0' })).toThrow();
+  });
+
+  it('el límite por IP tiene un valor por defecto y acepta solo enteros positivos', () => {
+    expect(loadConfig(base).publicRateLimitPerMin).toBe(60);
+    expect(loadConfig({ ...base, PUBLIC_RATE_LIMIT_PER_MIN: '10' }).publicRateLimitPerMin).toBe(10);
+    expect(() => loadConfig({ ...base, PUBLIC_RATE_LIMIT_PER_MIN: '0' })).toThrow();
+  });
+
+  it('WEB_DIST_DIR es opcional y se resuelve a ruta absoluta', () => {
+    expect(loadConfig(base).webDistDir).toBeNull();
+    const dir = loadConfig({ ...base, WEB_DIST_DIR: './dist-web' }).webDistDir;
+    expect(dir).toMatch(/dist-web$/);
+    expect(dir === null ? false : /^([a-zA-Z]:|\/)/.test(dir)).toBe(true);
+  });
+
   it('TRUST_PROXY es un entero chico', () => {
     expect(loadConfig({ ...base, TRUST_PROXY: '1' }).trustProxy).toBe(1);
     expect(() => loadConfig({ ...base, TRUST_PROXY: '-1' })).toThrow();

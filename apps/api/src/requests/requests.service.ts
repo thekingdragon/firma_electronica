@@ -37,9 +37,12 @@ export interface SignatureRequestSummary extends SignatureRequestView {
   /** Datos propios del tipo de documento (en la carta: los seguros nombrados). */
   data: Record<string, unknown>;
   createdAt: string;
+  /** Dictamen del corredor sobre la evidencia, o `null` si aún no se revisó. */
+  review: 'VERIFIED' | 'REJECTED' | null;
 }
 
 interface SummaryRow extends RequestRow {
+  review_result: 'VERIFIED' | 'REJECTED' | null;
   external_ref: string;
   snapshot: { signer: { name: string }; data: Record<string, unknown> };
   created_at: Date;
@@ -222,11 +225,12 @@ export class RequestsService {
     opts: { status?: RequestStatus; limit: number },
   ): Promise<SignatureRequestSummary[]> {
     const { rows } = await this.pool.query<SummaryRow>(
-      `SELECT id, document_type, reference, status, snapshot_sha256, delivery_mode, expires_at,
-              signed_at, external_ref, snapshot, created_at
-         FROM signature_requests
-        WHERE tenant_id = $1 AND ($2::request_status IS NULL OR status = $2::request_status)
-        ORDER BY created_at DESC, id DESC
+      `SELECT r.id, r.document_type, r.reference, r.status, r.snapshot_sha256, r.delivery_mode, r.expires_at,
+              r.signed_at, r.external_ref, r.snapshot, r.created_at, e.review_result
+         FROM signature_requests r
+         LEFT JOIN signature_evidence e ON e.request_id = r.id
+        WHERE r.tenant_id = $1 AND ($2::request_status IS NULL OR r.status = $2::request_status)
+        ORDER BY r.created_at DESC, r.id DESC
         LIMIT $3`,
       [tenant.id, opts.status ?? null, opts.limit],
     );
@@ -239,10 +243,11 @@ export class RequestsService {
       throw new ApiError(404, 'REQUEST_NOT_FOUND', 'Solicitud no encontrada.');
     }
     const { rows } = await this.pool.query<SummaryRow>(
-      `SELECT id, document_type, reference, status, snapshot_sha256, delivery_mode, expires_at,
-              signed_at, external_ref, snapshot, created_at
-         FROM signature_requests
-        WHERE tenant_id = $1 AND id = $2`,
+      `SELECT r.id, r.document_type, r.reference, r.status, r.snapshot_sha256, r.delivery_mode, r.expires_at,
+              r.signed_at, r.external_ref, r.snapshot, r.created_at, e.review_result
+         FROM signature_requests r
+         LEFT JOIN signature_evidence e ON e.request_id = r.id
+        WHERE r.tenant_id = $1 AND r.id = $2`,
       [tenant.id, id],
     );
     if (!rows[0]) throw new ApiError(404, 'REQUEST_NOT_FOUND', 'Solicitud no encontrada.');
@@ -261,8 +266,8 @@ export class RequestsService {
     const notFound = () => new ApiError(404, 'REQUEST_NOT_FOUND', 'Solicitud no encontrada.');
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw notFound();
 
-    const { rows } = await this.pool.query<{ status: RequestStatus; reference: string; pdf_path: string | null; photo_path: string | null }>(
-      `SELECT r.status, r.reference, r.pdf_path, e.photo_path
+    const { rows } = await this.pool.query<{ status: RequestStatus; reference: string; pdf_path: string | null; photo_path: string | null; photo_deleted_at: Date | null }>(
+      `SELECT r.status, r.reference, r.pdf_path, e.photo_path, e.photo_deleted_at
          FROM signature_requests r
          LEFT JOIN signature_evidence e ON e.request_id = r.id
         WHERE r.tenant_id = $1 AND r.id = $2`,
@@ -274,6 +279,9 @@ export class RequestsService {
     if (kind === 'document') {
       if (row.status !== 'SIGNED' || !row.pdf_path) throw new ApiError(409, 'NOT_SIGNED', 'La solicitud todavía no está firmada.');
       return { bytes: await this.storage.get(row.pdf_path), contentType: 'application/pdf', filename: `${row.reference}.pdf` };
+    }
+    if (row.photo_deleted_at) {
+      throw new ApiError(410, 'PHOTO_PURGED', 'La fotografía se borró al vencer el plazo de retención. Quedan sus huellas (hash) en la evidencia.');
     }
     if (!row.photo_path) throw new ApiError(404, 'PHOTO_NOT_FOUND', 'Esta solicitud no tiene fotografía.');
     const bytes = await this.storage.get(row.photo_path);
@@ -295,6 +303,7 @@ export class RequestsService {
       signerName: r.snapshot.signer.name,
       data: r.snapshot.data,
       createdAt: r.created_at.toISOString(),
+      review: r.review_result,
     };
   }
 

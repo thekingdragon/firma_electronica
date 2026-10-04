@@ -7,6 +7,7 @@
  */
 import { Pool } from 'pg';
 import * as dotenv from 'dotenv';
+import { parseSecretsKey } from '../common/secret-box';
 import { createTenant } from './tenants.service';
 dotenv.config();
 
@@ -28,17 +29,17 @@ async function main(): Promise<void> {
 
   const pool = new Pool({ connectionString: url });
   try {
-    const { tenant, apiKey, webhookSecret } = await createTenant(pool, {
-      name,
-      country,
-      legalName,
-      registryCode: arg('registry'),
-      webhookUrl: arg('webhook-url'),
-    });
+    const secretsKey = process.env.SECRETS_KEY ? parseSecretsKey(process.env.SECRETS_KEY) : null;
+    const { tenant, apiKey, webhookSecret } = await createTenant(
+      pool,
+      { name, country, legalName, registryCode: arg('registry'), webhookUrl: arg('webhook-url') },
+      secretsKey,
+    );
     console.log(`Tenant creado: ${tenant.name} (${tenant.id})`);
     console.log('Guarda estos valores ahora; no se vuelven a mostrar:');
     console.log(`  X-Api-Key:       ${apiKey}`);
-    console.log(`  Secreto webhook: ${webhookSecret}`);
+    if (webhookSecret) console.log(`  Secreto webhook: ${webhookSecret}`);
+    else console.log('  Secreto webhook: (no se generó: falta SECRETS_KEY; use tenant:webhook cuando la configure)');
   } finally {
     await pool.end();
   }

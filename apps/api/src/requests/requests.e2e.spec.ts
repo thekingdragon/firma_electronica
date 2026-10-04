@@ -48,6 +48,7 @@ describe('POST /v1/requests', () => {
     process.env.TOKEN_SECRET = TOKEN_SECRET;
     process.env.PUBLIC_BASE_URL = BASE_URL;
     process.env.NODE_ENV = 'test';
+    process.env.BACKGROUND_JOBS = 'false';
 
     await applyMigrations(TEST_URL!, join(__dirname, '..', '..', 'migrations'));
     pool = new Pool({ connectionString: TEST_URL });

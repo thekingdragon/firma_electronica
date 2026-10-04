@@ -6,6 +6,7 @@ import { PG_POOL } from '../db/db.module';
 import { formSchemaFor } from '../documents/form-schemas';
 import { imageInfo } from '../documents/image-info';
 import { renderDocument, resolveContent } from '../documents/render';
+import { enqueueWebhook } from '../webhooks/outbox';
 import { MailService } from '../mail/mail.service';
 import { StorageNotConfiguredError, StorageService } from '../storage/storage.service';
 import { PHOTO_POLICY, checkResolution, generateChallengeCode } from './photo';
@@ -258,6 +259,9 @@ export class SubmitService implements OnApplicationShutdown {
         ],
       );
       if (challenge) await client.query('UPDATE photo_challenges SET consumed_at = now() WHERE id = $1', [challenge.id]);
+
+      // El aviso al host nace con la firma: si esta transacción se deshace, el aviso tampoco existe.
+      await enqueueWebhook(client, link.id, 'signature.signed');
 
       await client.query('COMMIT');
       await this.sign.log(link.id, 'signed', ctx, { pdfSha256: pdfSha });
