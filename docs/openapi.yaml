@@ -18,7 +18,10 @@ paths:
         - in: header
           name: Idempotency-Key
           schema: { type: string }
-          description: Evita duplicar la solicitud si el host reintenta.
+          description: |
+            Entre 1 y 255 caracteres imprimibles, sin espacios; única por tenant. Repetir la
+            petición con la misma clave y el mismo cuerpo devuelve la misma solicitud (y el mismo
+            `signUrl`) con 200. La misma clave con otro cuerpo da 409.
       requestBody:
         required: true
         content:
@@ -30,7 +33,19 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SignatureRequest' }
-        '422': { description: Los datos no cumplen el esquema del tipo de documento }
+        '200':
+          description: La solicitud ya existía (repetición con la misma Idempotency-Key y cuerpo)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SignatureRequest' }
+        '401': { description: "Clave de API ausente o inválida (code INVALID_API_KEY)" }
+        '409': { description: "Idempotency-Key reutilizada con un cuerpo distinto (code IDEMPOTENCY_KEY_REUSED)" }
+        '422':
+          description: |
+            Petición inválida. El cuerpo trae `code` y, si aplica, `issues` por campo. Códigos:
+            VALIDATION_ERROR, DOCUMENT_TYPE_UNSUPPORTED, TEMPLATE_NOT_FOUND, OTP_REQUIRED,
+            INVALID_CONTACT, INVALID_DELIVERY, INVALID_WEBHOOK_URL, INVALID_IDEMPOTENCY_KEY y
+            CHANNEL_NOT_AVAILABLE (SMS/WhatsApp y delivery.mode=SERVICE aún sin proveedor).
   /v1/requests/{id}:
     get:
       summary: Consultar el estado de una solicitud

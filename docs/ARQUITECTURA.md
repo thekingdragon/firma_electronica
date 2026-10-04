@@ -178,3 +178,26 @@ Decisión: el panel vive en este repo y **solo llama a la capa de servicios de l
 base por su cuenta. Así la API y el panel comparten una sola lógica y, si un día se quiere separar
 el panel, el límite ya está limpio. El panel no se construye antes de que exista la página de
 firma: sin ella no tiene nada que enviar. Gestión de usuarios y roles avanzados, después.
+
+## 13. Estado de M1 y deudas conocidas
+
+Hecho: tenants con clave de API (hash SHA-256 en base, se muestra una sola vez), plantilla de
+partida por tenant, `POST /v1/requests` con validación por tipo, idempotencia (`Idempotency-Key`:
+mismo cuerpo → misma solicitud y mismo link con 200; otro cuerpo → 409; carrera → una sola fila) y
+token del link derivado por HMAC (`TOKEN_SECRET`), del que en base solo queda el hash.
+
+**Deudas que NO están resueltas** (no dar por cumplido §7 hasta cerrarlas):
+
+- **Aislamiento por tenant solo por consulta.** Cada consulta filtra por `tenant_id`, pero no hay
+  RLS ni rol de runtime separado del owner. Un olvido de filtro en una consulta nueva filtraría
+  datos entre tenants. Pendiente antes de producción.
+- **`tenants.webhook_secret` se guarda en claro** (hace falta recuperarlo para firmar el HMAC).
+  Cifrarlo con una clave de la aplicación antes de producción.
+- **Sin límite de intentos en la API.** El guard registra las claves inválidas, pero no bloquea.
+- **`webhookUrl` solo se valida como URL** (https obligatorio en producción). La protección contra
+  SSRF (no llamar a direcciones internas) debe hacerse al implementar el envío del webhook.
+- **Las plantillas por defecto son BORRADOR**: `legalReviewed: false` y la cláusula de aceptación
+  lleva la marca «[BORRADOR: texto sujeto a revisión legal]». Por defecto la carta exige OTP, foto
+  y desafío de foto (política de la fase 1, cambiable por plantilla).
+- **Aún no disponibles:** envío del link por el servicio (`delivery.mode=SERVICE`) y OTP por SMS o
+  WhatsApp; se rechazan con `CHANNEL_NOT_AVAILABLE` en vez de aceptarse sin enviar nada.

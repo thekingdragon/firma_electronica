@@ -11,7 +11,9 @@
     "start:prod": "node dist/main",
     "db:migrate": "ts-node src/db/migrate.ts",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "tenant:create": "ts-node src/tenants/create-tenant.ts",
+    "test:e2e": "jest --config jest.e2e.json --runInBand"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -20,7 +22,8 @@
     "dotenv": "^16.0.3",
     "pg": "^8.21.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
@@ -37,10 +40,20 @@
     "typescript": "^5.7.3"
   },
   "jest": {
-    "moduleFileExtensions": ["js", "json", "ts"],
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
-    "transform": { "^.+\\.ts$": "ts-jest" },
-    "testEnvironment": "node"
+    "transform": {
+      "^.+\\.ts$": "ts-jest"
+    },
+    "testEnvironment": "node",
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "\\.e2e\\.spec\\.ts$"
+    ]
   }
 }

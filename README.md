@@ -10,7 +10,7 @@ datos y recibe un webhook cuando el firmante firma. No lee la base del host.
 
 ## Estado
 
-**M0 — diseño.** Aún no hay código ejecutable. Ver [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md),
+**M1 en curso.** Hecho: tenants, clave de API y `POST /v1/requests`. Falta: PDF, OTP, página de firma, webhook. Ver [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md),
 [docs/openapi.yaml](docs/openapi.yaml) y [apps/api/migrations/0000_inicial.sql](apps/api/migrations/0000_inicial.sql) (el SQL se validó
 contra un Postgres temporal: crea las 9 tablas sin errores).
 
@@ -25,6 +25,20 @@ hecha con este servicio debe darse por válida ante la SBS.
   desafío aleatorio opcional por política; PDF con hash; webhook; revisión humana en el host.
 - **Fase 2 (después de ver la fase 1 funcionando):** SMS y WhatsApp, prueba de vida y comparación
   biométrica (detrás de `IdentityVerifier`), OCR del código como señal, otros tipos de documento.
+
+## Uso en desarrollo
+
+```
+cp apps/api/.env.example apps/api/.env      # completar DATABASE_URL, TOKEN_SECRET, PUBLIC_BASE_URL
+npm install
+npm run db:migrate
+npm run tenant:create -w api -- --name "Mi Corredora" --country PE --legal-name "Mi Corredora SAC"
+npm run dev
+```
+
+`tenant:create` imprime la clave de API una sola vez; guárdala. Las pruebas unitarias son
+`npm test`. Las de integración (`npm run test:e2e -w api`) necesitan `TEST_DATABASE_URL` apuntando a
+una base vacía cuyo nombre termine en `_test`: la prueba la vacía.
 
 ## Método de trabajo
 
