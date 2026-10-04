@@ -205,6 +205,8 @@ firma: sin ella no tiene nada que enviar. Gestión de usuarios y roles avanzados
   resolución real que entrega el dispositivo y el piso de 1280×720.
 - **Sin RLS**: el aislamiento entre tenants depende de que cada consulta filtre por `tenant_id`.
 - **`tenants.webhook_secret` en claro** en la base, y **el webhook al host no está implementado**.
+- **`POST /v1/requests/{id}/revoke` está en el contrato pero NO está implementado**: hoy no hay forma de
+  revocar una solicitud pendiente desde la API ni desde el panel (solo cambiando la base a mano).
 - **Sin límites por IP** en los endpoints públicos (el OTP y el desafío tienen topes por solicitud; el
   token del link tiene 256 bits). Falta un limitador por IP delante.
 - **La revisión humana de la foto no tiene pantalla**: el panel todavía no muestra la foto ni baja el
