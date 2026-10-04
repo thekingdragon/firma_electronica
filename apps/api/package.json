@@ -15,7 +15,8 @@
     "tenant:create": "ts-node src/tenants/create-tenant.ts",
     "test:e2e": "jest --config jest.e2e.json --runInBand",
     "tenant:mail": "ts-node src/tenants/set-tenant-mail.ts",
-    "tenant:webhook": "ts-node src/tenants/set-tenant-webhook.ts"
+    "tenant:webhook": "ts-node src/tenants/set-tenant-webhook.ts",
+    "template:publish": "ts-node src/tenants/publish-template.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -36,6 +37,7 @@
     "@nestjs/testing": "^11.0.1",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
+    "@types/js-yaml": "^4.0.9",
     "@types/multer": "^2.3.0",
     "@types/node": "^24.0.0",
     "@types/nodemailer": "^8.0.2",
@@ -43,6 +45,7 @@
     "@types/smtp-server": "^3.5.13",
     "@types/supertest": "^6.0.2",
     "jest": "^29.7.0",
+    "js-yaml": "^4.3.2",
     "smtp-server": "^3.19.17",
     "supertest": "^7.0.0",
     "ts-jest": "^29.2.5",

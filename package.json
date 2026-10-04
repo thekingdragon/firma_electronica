@@ -5,8 +5,11 @@
   "workspaces": ["apps/*"],
   "scripts": {
     "build": "npm run build -w api",
+    "build:web": "npm run build -w web",
+    "build:all": "npm run build:web && npm run build",
     "dev": "npm run dev -w api",
     "test": "npm run test -w api",
+    "test:e2e": "npm run test:e2e -w api",
     "db:migrate": "npm run db:migrate -w api"
   }
 }

@@ -1,16 +1,65 @@
 openapi: 3.0.3
 info:
   title: firma-electronica-service
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Contrato M0 (borrador). Autenticación del host: cabecera `X-Api-Key`.
     Los endpoints `/v1/sign/*` son públicos y se protegen con el token del link + OTP.
+    Todos los endpoints responden **429 RATE_LIMITED** (con `Retry-After`) si una IP excede su cupo por
+    minuto; una clave de API válida nunca se bloquea por los intentos fallidos de otros.
     Una solicitud de firma (`signature request`) es de un `documentType`; la plantilla activa del
     tenant para ese tipo define el contenido, el formulario y la política de evidencia.
 servers:
   - url: http://localhost:4000
 paths:
+  /v1/health:
+    get:
+      summary: Estado del servicio y de su base de datos
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  database: { type: string, enum: [up] }
+        '503': { description: La base de datos no responde }
+  /v1/me:
+    get:
+      summary: Quién es el dueño de la clave de API (sirve para validarla)
+      security: [{ apiKey: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name: { type: string }
+                  country: { type: string }
+                  legalName: { type: string }
+        '401': { description: INVALID_API_KEY }
   /v1/requests:
+    get:
+      summary: Listar las solicitudes del tenant, las más nuevas primero
+      security: [{ apiKey: [] }]
+      parameters:
+        - { in: query, name: status, schema: { type: string, enum: [PENDING, SIGNED, REJECTED, EXPIRED, REVOKED] } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/SignatureRequest' }
+        '422': { description: VALIDATION_ERROR (status o limit inválidos) }
     post:
       summary: Crear una solicitud de firma
       security: [{ apiKey: [] }]
@@ -60,11 +109,68 @@ paths:
   /v1/requests/{id}/revoke:
     post:
       summary: Revocar una solicitud pendiente
+      description: |
+        El enlace deja de abrir y una sesión en curso ya no puede firmar. Solo vale mientras está
+        PENDING. Avisa al host con `signature.revoked`.
       security: [{ apiKey: [] }]
       parameters: [{ $ref: '#/components/parameters/id' }]
       responses:
-        '200': { description: Revocada }
-        '409': { description: La solicitud ya no está pendiente }
+        '200':
+          description: Revocada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  status: { type: string, enum: [REVOKED] }
+        '404': { description: REQUEST_NOT_FOUND (también si es de otro tenant) }
+        '409': { description: NOT_PENDING (con el `status` actual) }
+  /v1/requests/{id}/evidence:
+    get:
+      summary: Todo lo registrado de una firma, para la revisión humana
+      security: [{ apiKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Evidence' }
+        '404': { description: REQUEST_NOT_FOUND }
+        '409': { description: NOT_SIGNED }
+  /v1/requests/{id}/review:
+    post:
+      summary: Dictamen del corredor sobre la identidad del firmante
+      description: |
+        Solo sobre una solicitud firmada. Se puede corregir un dictamen anterior; cada cambio queda en la
+        bitácora y avisa al host con `signature.reviewed`. No cambia el estado de la firma.
+      security: [{ apiKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [result, reviewedBy]
+              properties:
+                result: { type: string, enum: [VERIFIED, REJECTED] }
+                reviewedBy: { type: string, minLength: 2, maxLength: 100, description: Nombre de quien revisa. }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Guardado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result: { type: string, enum: [VERIFIED, REJECTED] }
+                  reviewedAt: { type: string, format: date-time }
+        '404': { description: REQUEST_NOT_FOUND }
+        '409': { description: NOT_SIGNED }
+        '422': { description: VALIDATION_ERROR o INVALID_ENCODING }
   /v1/requests/{id}/document:
     get:
       summary: PDF firmado (bytes)
@@ -81,7 +187,9 @@ paths:
   /v1/requests/{id}/photo:
     get:
       summary: Fotografía de verificación (bytes), para la revisión humana
-      description: Dato sensible. 404 PHOTO_NOT_FOUND si el tipo no exigió foto; 404 si es de otro tenant.
+      description: |
+        Dato sensible. 404 PHOTO_NOT_FOUND si el tipo no exigió foto; 404 si es de otro tenant; **410
+        PHOTO_PURGED** si se borró al vencer el plazo de retención (quedan sus hash en la evidencia).
       security: [{ apiKey: [] }]
       parameters: [{ $ref: '#/components/parameters/id' }]
       responses:
@@ -146,7 +254,7 @@ paths:
           description: Devuelve el documento para mostrar y un token de sesión corto
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/SigningView' }
+              schema: { $ref: '#/components/schemas/Verified' }
         '401': { description: OTP_INVALID (con attemptsLeft), OTP_EXPIRED u OTP_NOT_REQUESTED }
         '429': { description: OTP_LOCKED tras 5 intentos; hay que pedir un código nuevo }
   /v1/sign/{token}/view:
@@ -274,9 +382,15 @@ components:
           type: object
           required: [mode]
           properties:
-            mode: { type: string, enum: [SERVICE, HOST] }
-            channel: { type: string, enum: [SMS, WHATSAPP, EMAIL] }
-            to: { type: string, description: Solo con mode=SERVICE. }
+            mode:
+              type: string
+              enum: [SERVICE, HOST]
+              description: |
+                HOST: el host envía el link (se devuelve en `signUrl`). SERVICE: el servicio lo envía por
+                correo desde el SMTP del tenant, en la misma transacción que crea la solicitud (si el envío
+                falla, no queda creada: 502 MAIL_SEND_FAILED). Sin correo configurado: 409 MAIL_NOT_CONFIGURED.
+            channel: { type: string, enum: [EMAIL], description: Solo con mode=SERVICE. SMS y WhatsApp aún no están disponibles. }
+            to: { type: string, description: Solo con mode=SERVICE. Dirección de correo. }
         expiresInHours: { type: integer, default: 48 }
         webhookUrl: { type: string, description: Si se omite, se usa el del tenant. }
     SignatureRequest:
@@ -286,39 +400,93 @@ components:
         documentType: { type: string }
         reference: { type: string }
         status: { type: string, enum: [PENDING, SIGNED, REJECTED, EXPIRED, REVOKED] }
-        signUrl: { type: string, description: Solo con delivery.mode=HOST, en la creación. }
+        signUrl: { type: string, description: Solo con delivery.mode=HOST y mientras la solicitud está PENDING. }
+        sentTo: { type: string, description: Solo en la creación con mode=SERVICE. Correo enmascarado al que se envió. }
+        warnings:
+          type: array
+          items: { type: string, enum: [LINK_AND_OTP_SAME_CHANNEL] }
+          description: Avisos que no impiden crear la solicitud (el link y el código irían al mismo buzón).
         expiresAt: { type: string, format: date-time }
         signedAt: { type: string, format: date-time, nullable: true }
+        externalRef: { type: string, description: Solo al leer (GET). }
+        signerName: { type: string, description: Solo al leer (GET). }
+        data: { type: object, description: Solo al leer (GET). Datos propios del tipo. }
+        createdAt: { type: string, format: date-time, description: Solo al leer (GET). }
+        review: { type: string, enum: [VERIFIED, REJECTED], nullable: true, description: Solo al leer (GET). }
+        deliveryMode: { type: string, enum: [HOST, SERVICE], description: Solo al leer (GET). }
+    Evidence:
+      type: object
+      properties:
+        requestId: { type: string, format: uuid }
+        reference: { type: string }
+        status: { type: string }
+        signedAt: { type: string, format: date-time, nullable: true }
+        pdfSha256: { type: string, nullable: true }
+        signer: { type: object }
+        otp: { type: object, nullable: true, description: "{ verifiedAt, attempts }; null si el tipo no exige OTP." }
+        photo: { type: object, nullable: true, description: "{ width, height, sha256, receivedAt, deletedAt }; deletedAt si la retención la borró." }
+        challenge: { type: object, nullable: true, description: "{ code, issuedAt }: el código que debía verse en el papel." }
+        form: { type: object, description: Lo que el firmante marcó y escribió. }
+        clauseText: { type: string, description: Texto exacto de la cláusula que aceptó. }
+        ip: { type: string, nullable: true }
+        userAgent: { type: string, nullable: true }
+        clientInfo: { type: object, nullable: true }
+        review: { type: object, nullable: true, description: "{ result, reviewedBy, note, reviewedAt }" }
+        events: { type: array, items: { type: object }, description: Bitácora, de la más antigua a la más nueva. }
     SigningView:
       type: object
       properties:
         reference: { type: string }
         documentType: { type: string }
-        signerName: { type: string }
-        content: { type: object, description: Contenido del documento a mostrar. }
-        formSchema: { type: object, description: Campos que el firmante debe completar. }
+        issuer: { type: object, properties: { legalName: { type: string }, registryCode: { type: string, nullable: true } } }
+        signer: { type: object, properties: { name: { type: string }, documentType: { type: string }, documentNumber: { type: string } } }
+        data: { type: object, description: Datos propios del tipo (en la carta, los seguros nombrados). }
+        content: { type: object, description: "Contenido de la plantilla ya completo: `powers`, `observation` y `texts` (la redacción)." }
+        annexText: { type: string, nullable: true }
+        clause: { type: object, properties: { version: { type: integer }, text: { type: string } } }
         policy:
           type: object
           properties:
             photoRequired: { type: boolean }
             photoChallengeRequired: { type: boolean }
-        clauseVersion: { type: string }
-        clauseText: { type: string }
-        sessionToken: { type: string }
+        expiresAt: { type: string, format: date-time }
+    Verified:
+      type: object
+      properties:
+        sessionToken: { type: string, description: Va en la cabecera X-Session. Vigente 30 min. }
+        expiresAt: { type: string, format: date-time }
+        view: { $ref: '#/components/schemas/SigningView' }
   webhooks:
     signatureEvent:
       post:
-        summary: Evento de la solicitud; firmado con HMAC-SHA256 en `X-Signature`
+        summary: Aviso de cambio de una solicitud
+        description: |
+          POST a la URL del tenant (o la de la solicitud). Cabeceras: `X-Webhook-Id` (único y estable entre
+          reintentos: deduplique por él), `X-Webhook-Event` y `X-Signature: t=<unix>,v1=<hex>`, donde v1 =
+          HMAC-SHA256(secreto, "<t>.<cuerpo exacto>"). Responda 2xx para confirmar; cualquier otra cosa se
+          reintenta (30 s, 2 min, 10 min, 30 min, 1 h, 3 h, 6 h, 12 h) y tras el 9.º intento se da por fallido.
+          Entrega «al menos una vez» y sin orden garantizado. Detalle y código de verificación en WEBHOOKS.md.
         requestBody:
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  event: { type: string, enum: [signature.signed, signature.expired, signature.revoked] }
-                  requestId: { type: string }
-                  documentType: { type: string }
-                  externalRef: { type: string }
-                  signedAt: { type: string, format: date-time }
-                  pdfSha256: { type: string }
-                  documentUrl: { type: string, description: URL firmada de corta vida. }
+                  event: { type: string, enum: [signature.signed, signature.reviewed, signature.revoked, signature.expired] }
+                  id: { type: string, format: uuid }
+                  occurredAt: { type: string, format: date-time }
+                  data:
+                    type: object
+                    properties:
+                      requestId: { type: string, format: uuid }
+                      reference: { type: string }
+                      documentType: { type: string }
+                      externalRef: { type: string }
+                      status: { type: string }
+                      signedAt: { type: string, format: date-time, nullable: true }
+                      pdfSha256: { type: string, nullable: true }
+                      documentPath: { type: string, nullable: true, description: Ruta de la API para bajar el PDF con su clave. }
+                      photoPath: { type: string, nullable: true, description: Ruta de la API para bajar la foto con su clave. }
+                      review: { type: object, nullable: true }
+        responses:
+          '200': { description: Recibido }

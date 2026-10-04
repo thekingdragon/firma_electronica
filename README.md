@@ -1,58 +1,90 @@
 # firma-electronica-service
 
-Microservicio de firma electrónica por solicitud: el firmante recibe un link, verifica su acceso
-(OTP), completa el formulario del documento y firma desde su navegador; el servicio devuelve el
-PDF firmado con un paquete de evidencia. Es genérico por **tipo de documento** y se enfoca primero
-en la **carta de nombramiento de corredor de seguros** (modelo SBS, Anexo I y Anexo A).
+Microservicio de firma electrónica por solicitud: el firmante recibe un enlace, verifica su acceso con
+un código (OTP), lee y completa el documento, se toma una foto en el momento con su documento de
+identidad y firma desde su navegador; el servicio devuelve el PDF firmado con un paquete de evidencia.
+Es genérico por **tipo de documento** y se enfoca primero en la **carta de nombramiento de corredor de
+seguros** (modelo SBS, Anexo I y Anexo A).
 
-Independiente de cualquier sistema: el sistema que lo usa (el «host») le manda un snapshot de los
-datos y recibe un webhook cuando el firmante firma. No lee la base del host.
+Independiente de cualquier sistema: el sistema que lo usa (el «host») le manda un snapshot de los datos
+y recibe avisos por webhook. No lee la base del host. Trae además un **panel propio** para quien lo use
+sin un sistema detrás.
 
 ## Estado
 
-**M1/M2 funcionando de punta a punta en local**: crear solicitud → OTP → documento → foto con código → firma → PDF cifrado. Quedan deudas serias (cámara probada solo con una sintética, webhook, revisión humana en el panel, RLS): ver ARQUITECTURA §13.
-[docs/openapi.yaml](docs/openapi.yaml) y [apps/api/migrations/0000_inicial.sql](apps/api/migrations/0000_inicial.sql) (el SQL se validó
-contra un Postgres temporal: crea las 9 tablas sin errores).
+**Versión 1 completa en este repositorio, probada de punta a punta en local.** La API tiene pruebas
+unitarias y de integración contra PostgreSQL y un SMTP reales; el front se verificó a mano en el
+navegador. Lo que **no** está hecho, y por qué, está en [docs/ARQUITECTURA.md §13](docs/ARQUITECTURA.md).
+Las tres cosas que más pesan:
+
+- **La cámara solo se probó con una cámara sintética** de escritorio. Falta probar en celulares reales.
+- **Falta la revisión legal.** Las plantillas nacen en BORRADOR.
+- **La integración con Polix no está hecha** (necesita aprobación de quien lo mantiene).
 
 ## ⚠️ No usar con clientes reales todavía
 
-Falta la **revisión legal** (ver ARQUITECTURA §8). Hasta tener la opinión escrita, ninguna firma
-hecha con este servicio debe darse por válida ante la SBS.
+Falta la **revisión legal** (ARQUITECTURA §8). Hasta tener la opinión escrita y publicar el texto
+definitivo (`template:publish`), ninguna firma hecha con este servicio debe darse por válida ante la SBS.
 
-## Alcance
+## Qué hace
 
-- **Fase 1:** carta de nombramiento; link + OTP por correo (SMTP propio de cada tenant); foto con
-  desafío aleatorio opcional por política; PDF con hash; webhook; revisión humana en el host.
-- **Fase 2 (después de ver la fase 1 funcionando):** SMS y WhatsApp, prueba de vida y comparación
-  biométrica (detrás de `IdentityVerifier`), OCR del código como señal, otros tipos de documento.
+- Crear solicitudes por **API** o desde el **panel**; enviar el enlace por el host (copiar o WhatsApp) o
+  **por correo desde el servicio**.
+- Verificación por **OTP por correo** (SMTP propio de cada corredora), con tope de intentos.
+- **Foto en vivo** (sin subir archivos) con un **código aleatorio** que el firmante escribe en un papel.
+- **PDF firmado** con constancia (foto, hash, IP, hora), **cifrado en disco**; copia al firmante por correo.
+- **Revisión humana** de la identidad en el panel; **revocar**; **vencimiento** automático.
+- **Webhooks** firmados al host (`signature.signed|reviewed|revoked|expired`), con reintentos.
+- Plantillas **versionadas** por tenant, política de evidencia por tipo de documento, retención de fotos.
+
+## Documentación
+
+| Documento | Para qué |
+| --- | --- |
+| [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) | Diseño, seguridad, marco legal y **deudas conocidas**. |
+| [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md) | Poner el servicio en producción en esta PC. |
+| [docs/WEBHOOKS.md](docs/WEBHOOKS.md) | Cómo recibir y verificar los avisos (con código). |
+| [docs/openapi.yaml](docs/openapi.yaml) | Contrato de la API (una prueba lo compara con la API real). |
 
 ## Uso en desarrollo
 
 ```
-cp apps/api/.env.example apps/api/.env      # completar DATABASE_URL, TOKEN_SECRET, PUBLIC_BASE_URL
+cp apps/api/.env.example apps/api/.env      # completar DATABASE_URL, TOKEN_SECRET, SECRETS_KEY, PUBLIC_BASE_URL
 npm install
 npm run db:migrate
 npm run tenant:create -w api -- --name "Mi Corredora" --country PE --legal-name "Mi Corredora SAC"
 npm run dev                                  # API en :4000
-npm run dev -w web                           # panel en http://127.0.0.1:5180
+npm run dev -w web                           # panel en http://127.0.0.1:5180 (reenvía /v1 a la API)
 ```
 
-El panel (`apps/web`) pide la clave de API del tenant. Es una solución provisional para uso local:
-ver ARQUITECTURA §13 antes de exponerlo.
+`tenant:create` imprime la clave de API y el secreto de webhook **una sola vez**; guárdalos. El panel
+pide la clave de API del tenant (ver ARQUITECTURA §13 sobre su alcance). Sin correo configurado el
+firmante no recibe el código: para probar en local puede usarse `ALLOW_DEV_OTP=true` (el código aparece
+en la pantalla; el arranque se niega a combinarlo con producción) o configurar un SMTP con
+`tenant:mail`.
 
-`tenant:create` imprime la clave de API una sola vez; guárdala. Las pruebas unitarias son
-`npm test`. Las de integración (`npm run test:e2e -w api`) necesitan `TEST_DATABASE_URL` apuntando a
-una base vacía cuyo nombre termine en `_test`: la prueba la vacía.
+Comandos de administración (`npm run <comando> -w api -- <opciones>`): `tenant:create`, `tenant:mail`,
+`tenant:webhook`, `template:publish` y `db:migrate`. No tienen `--help`: cada uno documenta sus opciones
+y trae un ejemplo en el comentario de cabecera de su archivo (`apps/api/src/tenants/*.ts` y
+`apps/api/src/db/migrate.ts`). [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md) los usa en orden.
+
+## Pruebas
+
+```
+npm test                  # unitarias
+npm run test:e2e          # integración: necesita TEST_DATABASE_URL
+```
+
+`TEST_DATABASE_URL` debe apuntar a una base vacía cuyo nombre termine en `_test`: la prueba la vacía.
+Las de integración levantan un servidor SMTP real de captura y un receptor de webhooks, y comprueban
+el aislamiento entre tenants, la concurrencia (doble firma, intentos en paralelo), el contrato OpenAPI
+contra las rutas reales y las cabeceras de seguridad.
 
 ## Método de trabajo
 
-- Ramas de trabajo; `main` solo recibe lo cerrado. Commits en español, en imperativo, describiendo
-  el efecto. Se commitea y se hace push al cerrar cada tarea.
-- Hitos (cada uno cierra con commit + push):
-  - **M0** diseño: arquitectura, contrato OpenAPI, esquema SQL.
-  - **M1** API central: máquina de estados, generación de PDF, correo por tenant, webhook. Con
-    pruebas.
-  - **M2** página de firma: OTP, cámara, desafío, formulario.
-  - **M3** módulo de integración en `gestor_segurov3`.
-  - **M4** endurecimiento y piloto.
+- Ramas de trabajo; `main` solo recibe lo cerrado. Commits en español, en imperativo, describiendo el
+  efecto. Se commitea y se hace push al cerrar cada tarea.
 - Las migraciones se escriben a mano en SQL y llevan número correlativo en `apps/api/migrations/`.
+- Fase 2 (después de ver la fase 1 funcionando con clientes reales): SMS y WhatsApp, prueba de vida y
+  comparación biométrica (detrás de `IdentityVerifier`), OCR del código como señal, otros tipos de
+  documento.
