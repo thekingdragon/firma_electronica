@@ -3,10 +3,11 @@ import { ConfigModule } from './config/config.module';
 import { DbModule } from './db/db.module';
 import { HealthController } from './health/health.controller';
 import { RequestsModule } from './requests/requests.module';
+import { SignModule } from './sign/sign.module';
 import { TenantsModule } from './tenants/tenants.module';
 
 @Module({
-  imports: [ConfigModule, DbModule, TenantsModule, RequestsModule],
+  imports: [ConfigModule, DbModule, TenantsModule, RequestsModule, SignModule],
   controllers: [HealthController],
 })
 export class AppModule {}
