@@ -310,6 +310,9 @@ describe('flujo público de firma', () => {
       expect(v.signer).toEqual({ name: 'Ana Pérez Quispe', documentType: 'DNI', documentNumber: '12345678' });
       expect(v.data.insurances).toEqual(['SCTR Salud', 'SCTR Pensión']);
       expect(v.content.powers).toHaveLength(6);
+      // El servidor entrega la redacción ya completa: la página no duplica los textos de la carta.
+      expect(v.content.texts.title).toBe('CARTA DE NOMBRAMIENTO');
+      expect(v.content.texts.powersIntro).toContain('facultados');
       expect(v.annexText).toContain('Obligaciones del corredor de seguros');
       expect(v.clause.text).toContain('BORRADOR');
       expect(v.clause.version).toBe(1);

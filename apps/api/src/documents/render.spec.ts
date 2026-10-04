@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { PDFDocument } from 'pdf-lib';
 import { defaultTemplates } from '../tenants/default-templates';
 import { makePng } from './image-fixtures';
-import { UnsupportedDocumentTypeError, renderDocument } from './render';
+import { UnsupportedDocumentTypeError, renderDocument, resolveContent } from './render';
 import type { RenderInput } from './types';
 
 const tpl = defaultTemplates()[0];
@@ -103,6 +103,28 @@ describe('renderDocument (APPOINTMENT_LETTER)', () => {
     expect(f.measureLines('uno\n\ndos')).toEqual(['uno', '', 'dos']);
     // Y lo que la fuente no soporta sí se limpia, sin tocar los saltos.
     expect(f.measureLines('ok 😀\nfin')).toEqual(['ok ?', 'fin']);
+  });
+
+  describe('resolveContent', () => {
+    it('completa los textos que la plantilla no trae con los de partida', () => {
+      const r = resolveContent('APPOINTMENT_LETTER', { powers: [], texts: { title: 'MI TITULO' } });
+      const t = r.texts as Record<string, string>;
+      expect(t.title).toBe('MI TITULO');
+      expect(t.greeting).toBe('Estimados señores:');
+    });
+
+    it('una plantilla sin texts recibe todos los de partida', () => {
+      const t = resolveContent('APPOINTMENT_LETTER', { powers: [] }).texts as Record<string, string>;
+      expect(t.title).toBe('CARTA DE NOMBRAMIENTO');
+      expect(Object.keys(t).length).toBeGreaterThan(8);
+    });
+
+    it('no modifica el contenido original ni toca el de otros tipos', () => {
+      const original = { powers: [{ code: 'A' }] };
+      resolveContent('APPOINTMENT_LETTER', original);
+      expect(original).toEqual({ powers: [{ code: 'A' }] });
+      expect(resolveContent('OTRO', { x: 1 })).toEqual({ x: 1 });
+    });
   });
 
   it('un tipo sin generador se rechaza con un error propio', () => {

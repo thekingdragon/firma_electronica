@@ -6,6 +6,7 @@ import { ApiError } from '../common/api-error';
 import { sha256Hex } from '../common/crypto';
 import { APP_CONFIG, AppConfig } from '../config/config';
 import { PG_POOL } from '../db/db.module';
+import { resolveContent } from '../documents/render';
 import { MailNotConfiguredError, MailSendError, MailService } from '../mail/mail.service';
 import { OTP_POLICY, generateOtpCode, hashOtp, maskEmail, otpMatches } from './otp';
 import { issueSessionToken, verifySessionToken } from './session-token';
@@ -293,7 +294,7 @@ export class SignService {
       issuer: { legalName: row.legal_name, registryCode: row.registry_code },
       signer: row.snapshot.signer,
       data: row.snapshot.data,
-      content: row.body_json,
+      content: resolveContent(row.document_type, row.body_json),
       annexText: row.annex_text,
       clause: { version: row.template_version, text: row.clause_text },
       policy: { photoRequired: row.photo_required, photoChallengeRequired: row.photo_challenge_required },

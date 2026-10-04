@@ -375,3 +375,261 @@ tbody tr:last-child td {
     display: none;
   }
 }
+
+/* ===== Página pública de firma (/s/:token) ===== */
+.sign {
+  max-width: 560px;
+}
+.sign-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.sign-brand {
+  font-weight: 700;
+}
+.small {
+  font-size: 0.85rem;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.hidden {
+  display: none !important;
+}
+
+.progress {
+  list-style: none;
+  display: flex;
+  gap: 0.35rem;
+  padding: 0;
+  margin: 0 0 1rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.progress li {
+  flex: 1;
+  text-align: center;
+  padding: 0.35rem 0.2rem;
+  border-bottom: 3px solid var(--border);
+}
+.progress li span {
+  display: inline-flex;
+  width: 1.3rem;
+  height: 1.3rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--border);
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+.progress li.now {
+  color: var(--accent);
+  font-weight: 700;
+  border-color: var(--accent);
+}
+.progress li.now span {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.progress li.done {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+.progress li.done span {
+  background: var(--ok);
+  color: var(--surface);
+}
+
+.btn-block {
+  display: block;
+  width: 100%;
+  margin-top: 0.75rem;
+}
+.btn-large {
+  font-size: 1.1rem;
+  padding: 0.85rem 1rem;
+}
+.btn-link {
+  background: transparent;
+  border-color: transparent;
+  color: var(--accent);
+  font-weight: 500;
+}
+.card h2 {
+  margin-top: 0;
+}
+.card h3 {
+  font-size: 1rem;
+  margin: 1rem 0 0.4rem;
+}
+.plain {
+  margin: 0 0 0.75rem;
+  padding-left: 1.1rem;
+}
+
+.otp-input {
+  font-size: 2rem;
+  letter-spacing: 0.5rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+/* La carta */
+.letter p {
+  margin: 0.5rem 0;
+}
+.letter-title {
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+.insurances {
+  font-weight: 600;
+  padding-left: 1.6rem;
+}
+.powers {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  margin: 0.5rem 0;
+}
+.powers.invalid,
+.accept.invalid {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+.check {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  font-weight: 400;
+  margin: 0.6rem 0;
+  cursor: pointer;
+}
+.check input[type='checkbox'] {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: none;
+  margin-top: 0.1rem;
+  padding: 0;
+}
+.signer-box {
+  background: var(--accent-soft);
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+  margin: 1rem 0;
+}
+.annex {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  margin: 1rem 0;
+}
+.annex summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.annex-text {
+  white-space: pre-wrap;
+  font-size: 0.88rem;
+  margin-top: 0.6rem;
+  max-height: 22rem;
+  overflow: auto;
+}
+.accept {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.92rem;
+}
+
+/* Desafío y cámara */
+.challenge {
+  text-align: center;
+  background: var(--accent-soft);
+  border: 2px dashed var(--accent);
+  border-radius: 12px;
+  padding: 0.9rem;
+  margin: 1rem 0;
+}
+.challenge.expired {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+.challenge-label {
+  font-weight: 600;
+}
+.challenge-code {
+  font-size: 3.4rem;
+  font-weight: 800;
+  letter-spacing: 0.4rem;
+  font-family: ui-monospace, Consolas, monospace;
+  line-height: 1.1;
+  margin: 0.3rem 0;
+}
+.challenge-timer {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.tips {
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding-left: 1.1rem;
+}
+.camera {
+  position: relative;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.camera-video,
+.camera-shot {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.camera-video.mirrored {
+  transform: scaleX(-1);
+}
+.camera-placeholder {
+  color: #9aa5b5;
+}
+.review-photo img {
+  width: 100%;
+  max-height: 16rem;
+  object-fit: contain;
+  background: #000;
+  border-radius: 8px;
+}
+
+.done {
+  text-align: center;
+}
+.done-mark {
+  width: 4rem;
+  height: 4rem;
+  margin: 0 auto 0.5rem;
+  border-radius: 50%;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 2.4rem;
+  line-height: 4rem;
+  font-weight: 700;
+}
+.closed {
+  text-align: center;
+}

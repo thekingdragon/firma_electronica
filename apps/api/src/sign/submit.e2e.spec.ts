@@ -190,6 +190,7 @@ describe('firma: foto, envío y evidencia', () => {
     it('firma, guarda todo cifrado y deja la evidencia completa', async () => {
       const { id, res, d } = await firmar();
       expect(res.status).toBe(200);
+      expect(res.body.emailed).toBe(true); // tenant con SMTP y firmante con correo: sí se envía la copia
       expect(res.body.reference).toMatch(/^FE-\d{4}-/);
       expect(res.body.pdfSha256).toMatch(/^[0-9a-f]{64}$/);
 
@@ -492,6 +493,7 @@ describe('firma: foto, envío y evidencia', () => {
       const s = await conSesion('Sin otp');
       const r = await enviar(s, { photo: null });
       expect(r.status).toBe(200);
+      expect(r.body.emailed).toBe(false); // sin correo del firmante no se promete ninguna copia por correo
       const ev = (await pool.query('SELECT otp_verified_at, otp_attempts FROM signature_evidence WHERE request_id=$1', [s.id])).rows[0];
       expect(ev.otp_verified_at).toBeNull();
       expect(ev.otp_attempts).toBe(0);

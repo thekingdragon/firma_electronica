@@ -1,5 +1,5 @@
 /**
- * La página pública de firma (el destino del enlace) todavía no existe. Mientras sea false, el
- * panel avisa que el enlace aún no abre. Pasar a true cuando se construya.
+ * La página pública de firma (el destino del enlace) existe desde que se construyó `sign/SignPage`.
+ * Si algún día se desactiva, poner false para que el panel avise que el enlace aún no abre.
  */
-export const SIGNING_PAGE_READY = false;
+export const SIGNING_PAGE_READY = true;

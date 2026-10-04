@@ -67,9 +67,33 @@ paths:
         '409': { description: La solicitud ya no está pendiente }
   /v1/requests/{id}/document:
     get:
-      summary: URL firmada de corta vida al PDF firmado
+      summary: PDF firmado (bytes)
+      description: Solo si la solicitud está firmada (409 NOT_SIGNED si no). 404 si es de otro tenant.
       security: [{ apiKey: [] }]
       parameters: [{ $ref: '#/components/parameters/id' }]
+      responses:
+        '200':
+          description: El PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        '409': { description: La solicitud todavía no está firmada }
+  /v1/requests/{id}/photo:
+    get:
+      summary: Fotografía de verificación (bytes), para la revisión humana
+      description: Dato sensible. 404 PHOTO_NOT_FOUND si el tipo no exigió foto; 404 si es de otro tenant.
+      security: [{ apiKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      responses:
+        '200':
+          description: La imagen (image/jpeg o image/png)
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+  /v1/sign/{token}:
+    get:
+      summary: Qué ve el firmante ANTES de verificar su código
+      description: Solo lo mínimo; nada del contenido ni de los datos del firmante.
       responses:
         '200':
           description: OK
@@ -78,15 +102,34 @@ paths:
               schema:
                 type: object
                 properties:
-                  url: { type: string }
+                  reference: { type: string }
+                  documentType: { type: string }
+                  issuer: { type: object, properties: { name: { type: string } } }
+                  otpRequired: { type: boolean }
+                  otpTo: { type: string, nullable: true, description: Correo enmascarado (a**@dominio). }
                   expiresAt: { type: string, format: date-time }
+        '404': { description: LINK_NOT_FOUND }
+        '410': { description: ALREADY_SIGNED, LINK_REVOKED o LINK_EXPIRED }
   /v1/sign/{token}/otp:
     post:
       summary: Pedir el envío del OTP al contacto de la solicitud
-      description: Solo si la política del tipo exige OTP.
+      description: |
+        Solo si la política del tipo exige OTP. Un código nuevo reemplaza al anterior.
+        Enfriamiento de 60 s y tope de 5 envíos por hora por solicitud.
       responses:
-        '204': { description: OTP enviado }
-        '429': { description: Demasiados intentos }
+        '200':
+          description: Enviado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sentTo: { type: string }
+                  cooldownSeconds: { type: integer }
+                  devCode: { type: string, description: Solo con ALLOW_DEV_OTP y sin correo configurado. }
+        '409': { description: OTP_NOT_REQUIRED o MAIL_NOT_CONFIGURED }
+        '429': { description: OTP_COOLDOWN (con retryAfterSeconds) u OTP_RATE_LIMITED }
+        '502': { description: MAIL_SEND_FAILED (el detalle técnico NO se muestra al firmante) }
   /v1/sign/{token}/verify:
     post:
       summary: Verificar el OTP y abrir la sesión de firma
@@ -104,7 +147,32 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SigningView' }
-        '401': { description: Código incorrecto o vencido }
+        '401': { description: OTP_INVALID (con attemptsLeft), OTP_EXPIRED u OTP_NOT_REQUESTED }
+        '429': { description: OTP_LOCKED tras 5 intentos; hay que pedir un código nuevo }
+  /v1/sign/{token}/view:
+    get:
+      summary: Reabrir el documento con una sesión ya verificada (recarga de página)
+      parameters:
+        - { in: header, name: X-Session, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SigningView' }
+        '401': { description: SESSION_INVALID }
+  /v1/sign/{token}/document:
+    get:
+      summary: Copia firmada para el firmante (con su sesión)
+      parameters:
+        - { in: header, name: X-Session, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: El PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        '409': { description: NOT_SIGNED }
   /v1/sign/{token}/photo-challenge:
     post:
       summary: Emitir un código aleatorio para la foto (invalida el anterior)
@@ -149,9 +217,25 @@ paths:
                 clientInfo:
                   type: string
                   description: JSON con zona horaria y datos del navegador.
+      parameters:
+        - { in: header, name: X-Session, required: true, schema: { type: string } }
       responses:
-        '200': { description: Firmada }
-        '409': { description: La solicitud ya no está pendiente }
+        '200':
+          description: Firmada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reference: { type: string }
+                  signedAt: { type: string, format: date-time }
+                  pdfSha256: { type: string }
+                  emailed: { type: boolean, description: true solo si el servicio SÍ enviará la copia por correo. }
+        '409': { description: CHALLENGE_INVALID o CHALLENGE_EXPIRED (un fallo de validación NO consume el código) }
+        '410': { description: ALREADY_SIGNED, LINK_REVOKED o LINK_EXPIRED }
+        '413': { description: La foto supera 8 MB }
+        '422': { description: ACCEPTANCE_REQUIRED, VALIDATION_ERROR, PHOTO_REQUIRED, PHOTO_INVALID o PHOTO_TOO_SMALL }
+        '503': { description: STORAGE_NOT_CONFIGURED (falta SECRETS_KEY) }
 components:
   securitySchemes:
     apiKey: { type: apiKey, in: header, name: X-Api-Key }

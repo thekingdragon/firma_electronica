@@ -5,7 +5,7 @@ import { ApiError } from '../common/api-error';
 import { PG_POOL } from '../db/db.module';
 import { formSchemaFor } from '../documents/form-schemas';
 import { imageInfo } from '../documents/image-info';
-import { renderDocument } from '../documents/render';
+import { renderDocument, resolveContent } from '../documents/render';
 import { MailService } from '../mail/mail.service';
 import { StorageNotConfiguredError, StorageService } from '../storage/storage.service';
 import { PHOTO_POLICY, checkResolution, generateChallengeCode } from './photo';
@@ -24,6 +24,8 @@ export interface SubmitResult {
   reference: string;
   signedAt: string;
   pdfSha256: string;
+  /** `true` solo si el servicio SÍ va a mandar la copia por correo (hay correo del firmante y SMTP del tenant). */
+  emailed: boolean;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -200,7 +202,7 @@ export class SubmitService implements OnApplicationShutdown {
           issuer: { legalName: link.legal_name, registryCode: link.registry_code },
           signer: link.snapshot.signer,
           data: link.snapshot.data,
-          content: link.body_json,
+          content: resolveContent(link.document_type, link.body_json),
           annexText: link.annex_text,
           clauseText: link.clause_text,
           form,
@@ -259,10 +261,13 @@ export class SubmitService implements OnApplicationShutdown {
 
       await client.query('COMMIT');
       await this.sign.log(link.id, 'signed', ctx, { pdfSha256: pdfSha });
-      this.trackConfirmation(
-        this.sendConfirmation(link, pdf).catch((e) => this.logger.error(`Confirmación de ${link.reference}: ${(e as Error).message}`)),
-      );
-      return { reference: link.reference, signedAt: signedAt.toISOString(), pdfSha256: pdfSha };
+      const emailed = link.otp_channel === 'EMAIL' && !!link.otp_to && (await this.mail.isConfigured(link.tenant_id));
+      if (emailed) {
+        this.trackConfirmation(
+          this.sendConfirmation(link, pdf).catch((e) => this.logger.error(`Confirmación de ${link.reference}: ${(e as Error).message}`)),
+        );
+      }
+      return { reference: link.reference, signedAt: signedAt.toISOString(), pdfSha256: pdfSha, emailed };
     } catch (e) {
       await this.rollback(client);
       // Lo que se alcanzó a escribir en disco no quedó referenciado por nada: se borra.

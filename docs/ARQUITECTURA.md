@@ -179,34 +179,53 @@ base por su cuenta. Así la API y el panel comparten una sola lógica y, si un d
 el panel, el límite ya está limpio. El panel no se construye antes de que exista la página de
 firma: sin ella no tiene nada que enviar. Gestión de usuarios y roles avanzados, después.
 
-## 13. Estado de M1 y deudas conocidas
+## 13. Estado y deudas conocidas
 
-Hecho: tenants con clave de API (hash SHA-256 en base, se muestra una sola vez), plantilla de
-partida por tenant, `POST /v1/requests` con validación por tipo, idempotencia (`Idempotency-Key`:
-mismo cuerpo → misma solicitud y mismo link con 200; otro cuerpo → 409; carrera → una sola fila) y
-token del link derivado por HMAC (`TOKEN_SECRET`), del que en base solo queda el hash.
+**Hecho y probado (suite automática + recorrido real en el navegador):**
+
+- Tenants con clave de API (hash SHA-256 en base; se muestra una sola vez). Plantilla de partida por
+  tenant con las facultades del art. 32.1 y el Anexo A.
+- `POST /v1/requests` con validación por tipo, idempotencia, rechazo de UTF-8 inválido y link de firma
+  derivado por HMAC (`TOKEN_SECRET`).
+- **OTP por correo**: SMTP propio de cada tenant (contraseña cifrada), código de 6 dígitos guardado como
+  HMAC, vigencia de 10 min, tope atómico de 5 intentos, enfriamiento de 60 s, 5 envíos por hora.
+- **Página pública de firma** (`/s/:token`): verificación, lectura de la carta con sus facultades
+  editables, cámara en vivo **sin opción de subir archivo**, código aleatorio de 4 dígitos para la foto
+  (10 min), revisión y firma. Recupera la sesión al recargar.
+- **Firma**: foto validada por sus bytes (JPEG/PNG, mínimo 1280×720, máx. 8 MB), PDF generado con la
+  constancia, foto y PDF **cifrados en disco** (AES-256-GCM), evidencia completa en base, estado
+  `SIGNED` en una transacción con la solicitud bloqueada (no se firma dos veces), copia por correo
+  al firmante cuando hay SMTP, y descargas para el host con su clave de API.
+- Panel (`apps/web`): crea solicitudes, muestra estado y envía el link (copiar o WhatsApp `wa.me`).
 
 **Deudas que NO están resueltas** (no dar por cumplido §7 hasta cerrarlas):
 
-- **Aislamiento por tenant solo por consulta.** Cada consulta filtra por `tenant_id`, pero no hay
-  RLS ni rol de runtime separado del owner. Un olvido de filtro en una consulta nueva filtraría
-  datos entre tenants. Pendiente antes de producción.
-- **`tenants.webhook_secret` se guarda en claro** (hace falta recuperarlo para firmar el HMAC).
-  Cifrarlo con una clave de la aplicación antes de producción.
-- **Sin límite de intentos en la API.** El guard registra las claves inválidas, pero no bloquea.
-- **`webhookUrl` solo se valida como URL** (https obligatorio en producción). La protección contra
-  SSRF (no llamar a direcciones internas) debe hacerse al implementar el envío del webhook.
-- **Las plantillas por defecto son BORRADOR**: `legalReviewed: false` y la cláusula de aceptación
-  lleva la marca «[BORRADOR: texto sujeto a revisión legal]». Por defecto la carta exige OTP, foto
-  y desafío de foto (política de la fase 1, cambiable por plantilla).
+- **La cámara solo se probó con una cámara sintética** inyectada en el navegador. Falta probar en
+  celulares reales (sobre todo iOS/Safari y Android de gama baja) y con conexiones lentas: permisos,
+  resolución real que entrega el dispositivo y el piso de 1280×720.
+- **Sin RLS**: el aislamiento entre tenants depende de que cada consulta filtre por `tenant_id`.
+- **`tenants.webhook_secret` en claro** en la base, y **el webhook al host no está implementado**.
+- **Sin límites por IP** en los endpoints públicos (el OTP y el desafío tienen topes por solicitud; el
+  token del link tiene 256 bits). Falta un limitador por IP delante.
+- **La revisión humana de la foto no tiene pantalla**: el panel todavía no muestra la foto ni baja el
+  PDF (la API ya los sirve en `GET /v1/requests/:id/photo` y `/document`). Tampoco hay un campo para
+  marcar «verificada por el corredor».
+- **El código de la foto lo compara una persona**, no se lee automáticamente (OCR) ni se compara el
+  rostro con el DNI (fase 2).
+- **Las plantillas por defecto son BORRADOR**: `legalReviewed: false` y la cláusula lleva «[BORRADOR:
+  texto sujeto a revisión legal]». Por defecto la carta exige OTP, foto y desafío.
 - **Aún no disponibles:** envío del link por el servicio (`delivery.mode=SERVICE`) y OTP por SMS o
-  WhatsApp; se rechazan con `CHANNEL_NOT_AVAILABLE` en vez de aceptarse sin enviar nada.
+  WhatsApp; se rechazan con `CHANNEL_NOT_AVAILABLE`.
+- **El panel entra con la clave de API del tenant** (sin usuarios): solo para uso local y de prueba;
+  no exponerlo a otras personas. La clave queda en el `localStorage` del navegador.
+- Maquetación del PDF: la constancia queda en su propia página tras el anexo, con espacio en blanco.
 
-- **El panel entra con la clave de API del tenant** (primera iteración, sin usuarios ni
-  contraseñas): vale para uso local y de prueba. **No exponerlo a otras personas ni a Internet**
-  hasta reemplazarlo por un login real: quien tenga la clave tiene el control total del tenant, y
-  se guarda en el `localStorage` del navegador.
-- **El enlace de firma aún no abre**: la página pública de firma no existe. El panel lo avisa con
-  un cartel (`SIGNING_PAGE_READY` en `apps/web/src/config.ts`).
-- Puertos de desarrollo: API 4000, panel 5180 (`strictPort`; el 5173 es la web de Polix en
-  producción).
+**Para producción (esta PC es el servidor):**
+
+- Proceso nuevo en PM2 y ruta nueva en el túnel de Cloudflare. **La cámara exige HTTPS** (o localhost):
+  sin HTTPS el navegador no la ofrece.
+- Variables: `TOKEN_SECRET`, `SECRETS_KEY` (respaldarla donde estén los demás secretos: si se pierde, lo
+  cifrado es irrecuperable), `STORAGE_DIR` (con respaldo), `PUBLIC_BASE_URL`, `TRUST_PROXY=1` (sin esto
+  la IP de la evidencia sería la del túnel). `ALLOW_DEV_OTP` debe quedar en `false`: el arranque se
+  niega a combinarlo con `NODE_ENV=production`.
+- Puertos de desarrollo: API 4000, panel 5180 (`strictPort`; el 5173 es la web de Polix en producción).

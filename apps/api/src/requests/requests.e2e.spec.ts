@@ -155,6 +155,30 @@ describe('POST /v1/requests', () => {
       expect(res.body.issues[0].path).toBe('data.insurances');
     });
 
+    it('bytes que no son UTF-8 válido -> 422 INVALID_ENCODING (no se guarda un nombre corrupto)', async () => {
+      // «é» en Latin-1 es el byte E9, que no es UTF-8 válido: el servidor lo decodificaría como «�».
+      const json = JSON.stringify({ ...validBody(), signer: { name: 'Ana Pérez', documentType: 'DNI', documentNumber: '1' } });
+      const antes = await pool.query('SELECT count(*)::int AS n FROM signature_requests');
+      const res = await request(app.getHttpServer())
+        .post('/v1/requests')
+        .set('X-Api-Key', keyA)
+        .set('Content-Type', 'application/json')
+        // Se mandan EXACTAMENTE esos bytes: sin esto supertest serializaría el Buffer como JSON.
+        .serialize(() => Buffer.from(json, 'latin1') as unknown as string)
+        .send({});
+      expect(res.status).toBe(422);
+      expect(res.body.code).toBe('INVALID_ENCODING');
+      const despues = await pool.query('SELECT count(*)::int AS n FROM signature_requests');
+      expect(despues.rows[0].n).toBe(antes.rows[0].n);
+    });
+
+    it('el mismo texto bien codificado en UTF-8 sí se acepta, con sus acentos intactos', async () => {
+      const res = await post(keyA, { ...validBody(), signer: { name: 'Ana Pérez Ñandú', documentType: 'DNI', documentNumber: '1' } });
+      expect(res.status).toBe(201);
+      const { rows } = await pool.query(`SELECT snapshot->'signer'->>'name' AS n FROM signature_requests WHERE id=$1`, [res.body.id]);
+      expect(rows[0].n).toBe('Ana Pérez Ñandú');
+    });
+
     it('campo desconocido -> 422 (no se ignora)', async () => {
       const res = await post(keyA, { ...validBody(), extra: 1 });
       expect(res.status).toBe(422);

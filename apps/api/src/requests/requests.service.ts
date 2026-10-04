@@ -64,6 +64,19 @@ interface RequestRow {
 const UQ_IDEMPOTENCY = 'signature_requests_tenant_id_idempotency_key_key';
 const UQ_REFERENCE = 'signature_requests_tenant_id_reference_key';
 
+/** U+FFFD, el carácter con que se decodifica un byte que no es UTF-8 válido. */
+const REPLACEMENT_CHAR = String.fromCharCode(0xfffd);
+
+/** Recorre el JSON buscando el carácter de reemplazo en cualquier texto, clave o valor. */
+export function containsReplacementChar(value: unknown): boolean {
+  if (typeof value === 'string') return value.includes(REPLACEMENT_CHAR);
+  if (Array.isArray(value)) return value.some(containsReplacementChar);
+  if (value !== null && typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>).some(([k, v]) => k.includes(REPLACEMENT_CHAR) || containsReplacementChar(v));
+  }
+  return false;
+}
+
 const issues = (e: z.ZodError) =>
   e.issues.map((i) => ({ path: i.path.join('.'), message: i.message }));
 
@@ -77,6 +90,16 @@ export class RequestsService {
 
   /** Valida el cuerpo crudo; devuelve el input listo o lanza 422 con el detalle por campo. */
   parseBody(body: unknown): CreateRequestInput {
+    // «�» (U+FFFD) aparece cuando el cliente mandó bytes que no eran UTF-8 válido (típico de una
+    // terminal de Windows) y el servidor los decodificó con reemplazo. Aceptarlo guardaría un nombre
+    // corrupto en un documento legal sin que quien lo envió se entere.
+    if (containsReplacementChar(body)) {
+      throw new ApiError(
+        422,
+        'INVALID_ENCODING',
+        'El cuerpo contiene caracteres inválidos (�). Envíe el JSON codificado en UTF-8.',
+      );
+    }
     const parsed = createRequestSchema.safeParse(body);
     if (!parsed.success) {
       throw new ApiError(422, 'VALIDATION_ERROR', 'El cuerpo de la petición no es válido.', {

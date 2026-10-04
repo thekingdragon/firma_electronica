@@ -10,7 +10,7 @@ datos y recibe un webhook cuando el firmante firma. No lee la base del host.
 
 ## Estado
 
-**M1 en curso.** Hecho: tenants, clave de API y `POST /v1/requests`. Falta: PDF, OTP, página de firma, webhook. Ver [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md),
+**M1/M2 funcionando de punta a punta en local**: crear solicitud → OTP → documento → foto con código → firma → PDF cifrado. Quedan deudas serias (cámara probada solo con una sintética, webhook, revisión humana en el panel, RLS): ver ARQUITECTURA §13.
 [docs/openapi.yaml](docs/openapi.yaml) y [apps/api/migrations/0000_inicial.sql](apps/api/migrations/0000_inicial.sql) (el SQL se validó
 contra un Postgres temporal: crea las 9 tablas sin errores).
 
