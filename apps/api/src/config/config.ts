@@ -14,6 +14,8 @@ const boolean = (defaultValue: boolean) =>
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   PORT: z.coerce.number().int().positive().default(4000),
+  // Dirección en la que escucha. Por defecto solo esta máquina (detrás del túnel); 0.0.0.0 abre la red local.
+  HOST: z.string().min(1).default('127.0.0.1'),
   NODE_ENV: z.string().default('development'),
   // Deriva el token de cada link de firma y los hashes de OTP (HMAC). Si se filtra, se pueden
   // recalcular todos los links: tratarlo como un secreto de primer nivel y no cambiarlo con
@@ -50,6 +52,7 @@ const envSchema = z.object({
 export type AppConfig = {
   databaseUrl: string;
   port: number;
+  host: string;
   isProduction: boolean;
   tokenSecret: string;
   publicBaseUrl: string;
@@ -81,6 +84,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
     databaseUrl: e.DATABASE_URL,
     port: e.PORT,
+    host: e.HOST,
     isProduction,
     tokenSecret: e.TOKEN_SECRET,
     publicBaseUrl: e.PUBLIC_BASE_URL.replace(/\/+$/, ''),
