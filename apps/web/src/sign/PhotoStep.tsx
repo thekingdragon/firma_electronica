@@ -101,7 +101,7 @@ export function PhotoStep({
       if (prev) URL.revokeObjectURL(prev.url);
       return null;
     });
-    void cam.start();
+    void cam.start(isDocument ? 'environment' : 'user');
   }
 
   const tooSmall = shot ? !meetsMinimum(shot.width, shot.height) : false;
@@ -150,7 +150,7 @@ export function PhotoStep({
         <li>Busque buena luz y evite reflejos.</li>
       </ul>
 
-      <div className="camera">
+      <div className="camera" style={{ aspectRatio: String(shot ? shot.width / shot.height : (cam.aspect ?? 4 / 3)) }}>
         {/* Siempre montado para poder asignar el stream; se oculta si no hay cámara activa. */}
         <video
           ref={cam.videoRef}
@@ -174,7 +174,7 @@ export function PhotoStep({
       )}
 
       {!shot && cam.state.status !== 'ready' && (
-        <button type="button" className="btn btn-primary btn-block" onClick={() => cam.start()} disabled={cam.state.status === 'starting' || (needsChallenge && (!challenge || expired))}>
+        <button type="button" className="btn btn-primary btn-block" onClick={() => cam.start(isDocument ? 'environment' : 'user')} disabled={cam.state.status === 'starting' || (needsChallenge && (!challenge || expired))}>
           {cam.state.status === 'starting' ? 'Abriendo la cámara…' : 'Activar la cámara'}
         </button>
       )}

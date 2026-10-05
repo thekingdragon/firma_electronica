@@ -37,6 +37,8 @@ export function useCamera() {
   const streamRef = useRef<MediaStream | null>(null);
   const [state, setState] = useState<CameraState>({ status: 'idle' });
   const [mirrored, setMirrored] = useState(true);
+  /** Proporción real (ancho/alto) del video: la vista previa se dibuja con ella para que lo que se ve sea lo que se captura. */
+  const [aspect, setAspect] = useState<number | null>(null);
 
   const stop = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -77,6 +79,7 @@ export function useCamera() {
       video.srcObject = stream;
       await video.play();
       setMirrored(facingMode === 'user');
+      setAspect(video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : null);
       setState({ status: 'ready' });
     } catch (e) {
       setState({ status: 'error', message: explain(e) });
@@ -98,7 +101,7 @@ export function useCamera() {
     return { blob, width: canvas.width, height: canvas.height };
   }, []);
 
-  return { videoRef, state, mirrored, start, stop, capture };
+  return { videoRef, state, mirrored, aspect, start, stop, capture };
 }
 
 /** Piso de resolución que el servidor exige (ver PHOTO_POLICY): avisar antes de enviar ahorra un viaje. */

@@ -595,6 +595,8 @@ tbody tr:last-child td {
   border-radius: 12px;
   overflow: hidden;
   aspect-ratio: 4 / 3;
+  max-height: 70vh;
+  margin-inline: auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -603,7 +605,8 @@ tbody tr:last-child td {
 .camera-shot {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* Entero, sin recortar: lo que se ve es exactamente lo que queda en la foto. */
+  object-fit: contain;
 }
 .camera-video.mirrored {
   transform: scaleX(-1);
