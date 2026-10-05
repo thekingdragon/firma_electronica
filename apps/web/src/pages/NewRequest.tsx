@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, ApiRequestError, type CreateRequestBody } from '../api';
 import { useSession } from '../auth';
 import { LinkBox } from '../components/LinkBox';
+import { newUuid } from '../format';
 
 type Created = Awaited<ReturnType<typeof api.create>>;
 
@@ -58,7 +59,7 @@ export function NewRequest() {
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<{ result: Created; signerName: string; phone: string } | null>(null);
   // Una clave por formulario abierto: un doble clic no crea dos solicitudes.
-  const idempotencyKey = useRef(crypto.randomUUID());
+  const idempotencyKey = useRef(newUuid());
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => {
     setForm((f) => ({ ...f, [k]: v }));
@@ -99,7 +100,7 @@ export function NewRequest() {
   }
 
   function another() {
-    idempotencyKey.current = crypto.randomUUID();
+    idempotencyKey.current = newUuid();
     setForm(EMPTY);
     setShown({});
     setServerError(null);
