@@ -12,6 +12,18 @@ export type CameraState =
   | { status: 'ready' }
   | { status: 'error'; message: string };
 
+/** Proporción de un documento tipo tarjeta (ISO/IEC 7810 ID-1: 85,6 × 54 mm), como el DNI. */
+export const CARD_ASPECT = 85.6 / 54;
+
+/**
+ * Marco guía del documento dentro de un cuadro de `width`×`height`: el mayor rectángulo con proporción de
+ * tarjeta que cabe con un margen. La vista previa lo dibuja y la captura recorta EXACTAMENTE esto.
+ */
+export function cardFrame(width: number, height: number): { w: number; h: number } {
+  const w = Math.min(width * 0.96, height * 0.96 * CARD_ASPECT);
+  return { w, h: w / CARD_ASPECT };
+}
+
 /** Mensaje que el firmante puede entender y accionar, por tipo de fallo de la cámara. */
 function explain(e: unknown): string {
   const name = (e as { name?: string } | null)?.name;
@@ -67,7 +79,8 @@ export function useCamera() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        // Para el documento se pide más resolución: la foto sale recortada al marco y debe quedar legible.
+        video: { facingMode, width: { ideal: facingMode === 'environment' ? 3840 : 1920 }, height: { ideal: facingMode === 'environment' ? 2160 : 1080 } },
         audio: false,
       });
       streamRef.current = stream;
@@ -87,15 +100,21 @@ export function useCamera() {
   }, []);
 
   /** Toma el cuadro actual con la resolución real del video, sin espejar (lo que se ve es solo la vista previa). */
-  const capture = useCallback(async (): Promise<Captured> => {
+  const capture = useCallback(async (crop: 'card' | null = null): Promise<Captured> => {
     const video = videoRef.current;
     if (!video || !video.videoWidth) throw new Error('La cámara todavía no está lista.');
+    // Con `crop: 'card'` se guarda solo lo que queda dentro del marco guía, no el cuadro completo.
+    const full = { w: video.videoWidth, h: video.videoHeight };
+    const frame = crop === 'card' ? cardFrame(full.w, full.h) : full;
+    const out = { w: Math.round(frame.w), h: Math.round(frame.h) };
+    const sx = Math.round((full.w - out.w) / 2);
+    const sy = Math.round((full.h - out.h) / 2);
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = out.w;
+    canvas.height = out.h;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('No se pudo procesar la imagen.');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, sx, sy, out.w, out.h, 0, 0, out.w, out.h);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
     if (!blob) throw new Error('No se pudo procesar la imagen.');
     return { blob, width: canvas.width, height: canvas.height };
@@ -105,6 +124,7 @@ export function useCamera() {
 }
 
 /** Piso de resolución que el servidor exige (ver PHOTO_POLICY): avisar antes de enviar ahorra un viaje. */
-export function meetsMinimum(width: number, height: number): boolean {
-  return Math.max(width, height) >= 1280 && Math.min(width, height) >= 720;
+export function meetsMinimum(width: number, height: number, kind: 'selfie' | 'id' = 'selfie'): boolean {
+  const [long, short] = kind === 'id' ? [1000, 600] : [1280, 720];
+  return Math.max(width, height) >= long && Math.min(width, height) >= short;
 }

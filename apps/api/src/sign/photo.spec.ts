@@ -13,6 +13,17 @@ describe('photo', () => {
     });
   });
 
+  describe('checkResolution de la foto del documento (recortada al marco)', () => {
+    it('acepta un recorte de DNI legible y rechaza uno pequeño', () => {
+      expect(checkResolution({ width: 1080, height: 681 }, 'id')).toBeNull();
+      expect(checkResolution({ width: 1000, height: 600 }, 'id')).toBeNull();
+      expect(checkResolution({ width: 999, height: 600 }, 'id')).not.toBeNull();
+      expect(checkResolution({ width: 1000, height: 599 }, 'id')).not.toBeNull();
+      // El mismo recorte NO alcanza para la selfie: el piso de la selfie sigue siendo 1280×720.
+      expect(checkResolution({ width: 1080, height: 681 })).not.toBeNull();
+    });
+  });
+
   describe('checkResolution', () => {
     it('acepta 1280×720 y más, en horizontal o vertical', () => {
       expect(checkResolution({ width: 1280, height: 720 })).toBeNull();

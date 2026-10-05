@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SignApiError, signApi, type Challenge, type SigningView } from './signApi';
-import { meetsMinimum, useCamera, type Captured } from './useCamera';
+import { cardFrame, meetsMinimum, useCamera, type Captured } from './useCamera';
 
 export interface TakenPhoto extends Captured {
   url: string;
@@ -84,7 +84,7 @@ export function PhotoStep({
   async function take() {
     setError(null);
     try {
-      const c = await cam.capture();
+      const c = await cam.capture(isDocument ? 'card' : null);
       const url = URL.createObjectURL(c.blob);
       setShot((prev) => {
         if (prev) URL.revokeObjectURL(prev.url);
@@ -104,7 +104,7 @@ export function PhotoStep({
     void cam.start(isDocument ? 'environment' : 'user');
   }
 
-  const tooSmall = shot ? !meetsMinimum(shot.width, shot.height) : false;
+  const tooSmall = shot ? !meetsMinimum(shot.width, shot.height, isDocument ? 'id' : 'selfie') : false;
   const cameraOn = cam.state.status === 'ready' || cam.state.status === 'starting';
 
   return (
@@ -143,7 +143,7 @@ export function PhotoStep({
 
       <ul className="tips">
         {isDocument ? (
-          <li>Que el documento se vea completo y se lean con claridad su número y sus datos.</li>
+          <li>Acomode el documento dentro del marco: la foto guarda solo lo que queda adentro. Que se lean con claridad su número y sus datos.</li>
         ) : (
           <li>Que se vean claros su rostro y el papel con el número.</li>
         )}
@@ -158,6 +158,17 @@ export function PhotoStep({
           muted
           className={`camera-video${cameraOn ? '' : ' hidden'}${cam.mirrored ? ' mirrored' : ''}`}
         />
+        {isDocument && cameraOn && !shot && cam.aspect && (() => {
+          // Marco guía: lo de afuera se atenúa y la foto guarda solo lo de adentro.
+          const f = cardFrame(cam.aspect, 1);
+          return (
+            <div
+              className="camera-guide"
+              aria-hidden="true"
+              style={{ width: `${(f.w / cam.aspect) * 100}%`, height: `${f.h * 100}%` }}
+            />
+          );
+        })()}
         {shot && <img className="camera-shot" src={shot.url} alt="Su fotografía tomada" />}
         {!cameraOn && !shot && <div className="camera-placeholder">La cámara está apagada</div>}
       </div>

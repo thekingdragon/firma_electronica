@@ -296,7 +296,7 @@ export class SubmitService implements OnApplicationShutdown {
   ): { bytes: Buffer; type: 'jpeg' | 'png'; width: number; height: number; sha256: string } {
     const info = imageInfo(bytes);
     if (!info) throw new ApiError(422, `${prefix}_INVALID`, 'El archivo no es una imagen JPEG o PNG válida.');
-    const tooSmall = checkResolution(info);
+    const tooSmall = checkResolution(info, prefix === 'ID_PHOTO' ? 'id' : 'selfie');
     if (tooSmall) throw new ApiError(422, `${prefix}_TOO_SMALL`, tooSmall);
     return { bytes, type: info.type, width: info.width, height: info.height, sha256: createHash('sha256').update(bytes).digest('hex') };
   }

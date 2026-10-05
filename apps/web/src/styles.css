@@ -611,6 +611,17 @@ tbody tr:last-child td {
 .camera-video.mirrored {
   transform: scaleX(-1);
 }
+.camera-guide {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border: 2px solid #fff;
+  border-radius: 10px;
+  /* Atenúa todo lo que queda fuera del marco: es lo que NO se guarda. */
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
 .camera-placeholder {
   color: #9aa5b5;
 }
