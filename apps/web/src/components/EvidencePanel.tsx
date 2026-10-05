@@ -39,6 +39,7 @@ export function EvidencePanel({
   const [photo, setPhoto] = useState<PhotoState>({ kind: 'loading' });
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [zoomed, setZoomed] = useState(false);
 
   const load = useCallback(() => {
     api
@@ -48,6 +49,14 @@ export function EvidencePanel({
   }, [apiKey, requestId]);
 
   useEffect(load, [load]);
+
+  // Foto ampliada: se cierra con Escape.
+  useEffect(() => {
+    if (!zoomed) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setZoomed(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [zoomed]);
 
   // La foto va por fetch con la clave en una cabecera: se convierte en una URL local para mostrarla.
   useEffect(() => {
@@ -116,7 +125,20 @@ export function EvidencePanel({
         <div className="review-grid">
           <div>
             {photo.kind === 'loading' && <div className="photo-box muted">Cargando la foto…</div>}
-            {photo.kind === 'ready' && <img className="photo-box" src={photo.url} alt={`Fotografía de verificación de ${signerName}`} />}
+            {photo.kind === 'ready' && (
+              <>
+                <button type="button" className="photo-zoom" onClick={() => setZoomed(true)} title="Ampliar la foto">
+                  <img className="photo-box" src={photo.url} alt={`Fotografía de verificación de ${signerName}`} />
+                </button>
+                <p className="hint">Toque la foto para verla en grande.</p>
+                {zoomed && (
+                  <div className="lightbox" role="dialog" aria-modal="true" aria-label="Fotografía ampliada" onClick={() => setZoomed(false)}>
+                    <button type="button" className="lightbox-close" onClick={() => setZoomed(false)} aria-label="Cerrar">×</button>
+                    <img src={photo.url} alt={`Fotografía de verificación de ${signerName}, ampliada`} />
+                  </div>
+                )}
+              </>
+            )}
             {photo.kind === 'none' && <div className="photo-box muted">{photo.message}</div>}
           </div>
           <div>
@@ -128,8 +150,7 @@ export function EvidencePanel({
             )}
             <p className="checklist-title">Antes de decidir, compruebe en la foto:</p>
             <ul className="checklist">
-              <li>Que el <strong>rostro</strong> se vea claro y coincida con el del documento de identidad.</li>
-              <li>Que el documento sea de <strong>{ev.signer.name}</strong> ({ev.signer.documentType} {ev.signer.documentNumber}).</li>
+              <li>Que el <strong>rostro</strong> se vea claro, de una sola persona, tomado en el momento.</li>
               {ev.challenge && <li>Que el papel muestre <strong>exactamente {ev.challenge.code}</strong>, escrito a mano.</li>}
             </ul>
             <p className="hint">Esta revisión es manual: el servicio todavía no compara el rostro ni lee el código automáticamente.</p>

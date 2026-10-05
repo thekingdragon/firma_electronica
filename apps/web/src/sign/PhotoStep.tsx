@@ -107,15 +107,14 @@ export function PhotoStep({
     <section className="card">
       <h2>Su fotografía</h2>
       <p>
-        Para confirmar que es usted quien firma ahora, tómese una foto <strong>en este momento</strong> sosteniendo su{' '}
-        <strong>{view.signer.documentType}</strong> junto a su rostro. No se puede subir una foto guardada.
+        Para confirmar que es usted quien firma ahora, tómese una foto de su rostro (selfie) <strong>en este momento</strong>, sosteniendo el papel con el número. No se puede subir una foto guardada.
       </p>
 
       {needsChallenge && (
         <div className={`challenge${expired ? ' expired' : ''}`} aria-live="polite">
           {challenge ? (
             <>
-              <div className="challenge-label">Escriba este número en un papel y sosténgalo junto a su documento</div>
+              <div className="challenge-label">Escriba este número en un papel y sosténgalo junto a su rostro</div>
               <div className="challenge-code" aria-label={`Código ${challenge.code.split('').join(' ')}`}>{challenge.code}</div>
               <div className="challenge-timer">
                 {expired ? 'Este código venció.' : `Vence en ${mmss(left)}`}
@@ -131,8 +130,8 @@ export function PhotoStep({
       )}
 
       <ul className="tips">
-        <li>Que se vean claros su rostro, el papel con el número y su documento.</li>
-        <li>Busque buena luz y evite reflejos sobre el documento.</li>
+        <li>Que se vean claros su rostro y el papel con el número.</li>
+        <li>Busque buena luz y evite reflejos.</li>
       </ul>
 
       <div className="camera">
