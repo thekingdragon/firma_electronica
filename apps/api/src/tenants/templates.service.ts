@@ -8,6 +8,7 @@ export interface TemplateChanges {
   otpRequired?: boolean;
   photoRequired?: boolean;
   photoChallengeRequired?: boolean;
+  idPhotoRequired?: boolean;
   /** Marca (o desmarca) que el texto pasó la revisión legal. Queda en el contenido de la plantilla. */
   legalReviewed?: boolean;
 }
@@ -55,8 +56,9 @@ export async function publishTemplate(
       otp_required: boolean;
       photo_required: boolean;
       photo_challenge_required: boolean;
+      id_photo_required: boolean;
     }>(
-      `SELECT id, version, active, body_json, annex_text, clause_text, otp_required, photo_required, photo_challenge_required
+      `SELECT id, version, active, body_json, annex_text, clause_text, otp_required, photo_required, photo_challenge_required, id_photo_required
          FROM document_templates WHERE tenant_id = $1 AND document_type = $2
         ORDER BY active DESC, version DESC LIMIT 1`,
       [tenantId, documentType],
@@ -76,6 +78,11 @@ export async function publishTemplate(
       throw new Error('El desafío de la foto exige que la foto sea obligatoria (photoChallengeRequired implica photoRequired).');
     }
 
+    const idPhotoRequired = changes.idPhotoRequired ?? base.id_photo_required;
+    if (idPhotoRequired && !photoRequired) {
+      throw new Error('La foto del documento exige que la foto de verificación sea obligatoria (idPhotoRequired implica photoRequired).');
+    }
+
     const body = { ...base.body_json };
     if (changes.legalReviewed !== undefined) body.legalReviewed = changes.legalReviewed;
 
@@ -86,8 +93,8 @@ export async function publishTemplate(
     const ins = await client.query<{ id: string }>(
       `INSERT INTO document_templates
          (tenant_id, document_type, version, body_json, annex_text, clause_text,
-          otp_required, photo_required, photo_challenge_required, active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+          otp_required, photo_required, photo_challenge_required, id_photo_required, active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
        RETURNING id`,
       [
         tenantId,
@@ -99,6 +106,7 @@ export async function publishTemplate(
         changes.otpRequired ?? base.otp_required,
         photoRequired,
         photoChallengeRequired,
+        idPhotoRequired,
       ],
     );
     await client.query('COMMIT');

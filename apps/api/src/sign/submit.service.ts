@@ -15,6 +15,7 @@ import { createHash } from 'node:crypto';
 
 export interface SubmitInput {
   photo: Buffer | undefined;
+  idPhoto: Buffer | undefined;
   challengeId: string | undefined;
   accepted: unknown;
   form: unknown;
@@ -134,23 +135,14 @@ export class SubmitService implements OnApplicationShutdown {
     const ci = clientInfoSchema.safeParse(parseJsonField(input.clientInfo));
     const clientInfo = ci.success ? ci.data : {};
 
-    let photo: { bytes: Buffer; type: 'jpeg' | 'png'; width: number; height: number; sha256: string } | null = null;
     if (link.photo_required && !input.photo) {
       throw new ApiError(422, 'PHOTO_REQUIRED', 'Falta la fotografía de verificación.');
     }
-    if (input.photo) {
-      const info = imageInfo(input.photo);
-      if (!info) throw new ApiError(422, 'PHOTO_INVALID', 'El archivo no es una imagen JPEG o PNG válida.');
-      const tooSmall = checkResolution(info);
-      if (tooSmall) throw new ApiError(422, 'PHOTO_TOO_SMALL', tooSmall);
-      photo = {
-        bytes: input.photo,
-        type: info.type,
-        width: info.width,
-        height: info.height,
-        sha256: createHash('sha256').update(input.photo).digest('hex'),
-      };
+    if (link.id_photo_required && !input.idPhoto) {
+      throw new ApiError(422, 'ID_PHOTO_REQUIRED', 'Falta la fotografía de su documento de identidad.');
     }
+    const photo = input.photo ? this.checkedImage(input.photo, 'PHOTO') : null;
+    const idPhoto = input.idPhoto ? this.checkedImage(input.idPhoto, 'ID_PHOTO') : null;
     if (link.photo_challenge_required && (!input.challengeId || !UUID.test(input.challengeId))) {
       throw new ApiError(409, 'CHALLENGE_INVALID', 'Falta el código de la foto. Pida uno nuevo y vuelva a tomarla.');
     }
@@ -213,6 +205,7 @@ export class SubmitService implements OnApplicationShutdown {
             otpVerifiedAt: otpEvidence?.verifiedAt ?? null,
             challengeCode: challenge?.code ?? null,
             photo,
+            idPhoto,
           },
         }),
       );
@@ -221,11 +214,16 @@ export class SubmitService implements OnApplicationShutdown {
       const base = `${link.tenant_id}/${link.id}`;
       const pdfPath = `${base}/document.bin`;
       const photoPath = photo ? `${base}/photo.bin` : null;
+      const idPhotoPath = idPhoto ? `${base}/id-photo.bin` : null;
       await this.storage.put(pdfPath, pdf);
       written.push(pdfPath);
       if (photo && photoPath) {
         await this.storage.put(photoPath, photo.bytes);
         written.push(photoPath);
+      }
+      if (idPhoto && idPhotoPath) {
+        await this.storage.put(idPhotoPath, idPhoto.bytes);
+        written.push(idPhotoPath);
       }
 
       const upd = await client.query(
@@ -238,8 +236,9 @@ export class SubmitService implements OnApplicationShutdown {
       await client.query(
         `INSERT INTO signature_evidence
            (request_id, otp_verified_at, otp_attempts, challenge_id, photo_received_at, photo_path, photo_sha256,
-            photo_width, photo_height, form_json, clause_text, ip, user_agent, client_info, captured_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+            photo_width, photo_height, form_json, clause_text, ip, user_agent, client_info, captured_at,
+            id_photo_received_at, id_photo_path, id_photo_sha256, id_photo_width, id_photo_height)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
         [
           link.id,
           otpEvidence?.verifiedAt ?? null,
@@ -256,6 +255,11 @@ export class SubmitService implements OnApplicationShutdown {
           ctx.userAgent?.slice(0, 500) ?? '',
           JSON.stringify(clientInfo),
           signedAt,
+          idPhoto ? signedAt : null,
+          idPhotoPath,
+          idPhoto?.sha256 ?? null,
+          idPhoto?.width ?? null,
+          idPhoto?.height ?? null,
         ],
       );
       if (challenge) await client.query('UPDATE photo_challenges SET consumed_at = now() WHERE id = $1', [challenge.id]);
@@ -283,6 +287,18 @@ export class SubmitService implements OnApplicationShutdown {
     } finally {
       client.release();
     }
+  }
+
+  /** Valida una imagen recibida (JPEG/PNG real, resolución mínima) y calcula su huella. */
+  private checkedImage(
+    bytes: Buffer,
+    prefix: 'PHOTO' | 'ID_PHOTO',
+  ): { bytes: Buffer; type: 'jpeg' | 'png'; width: number; height: number; sha256: string } {
+    const info = imageInfo(bytes);
+    if (!info) throw new ApiError(422, `${prefix}_INVALID`, 'El archivo no es una imagen JPEG o PNG válida.');
+    const tooSmall = checkResolution(info);
+    if (tooSmall) throw new ApiError(422, `${prefix}_TOO_SMALL`, tooSmall);
+    return { bytes, type: info.type, width: info.width, height: info.height, sha256: createHash('sha256').update(bytes).digest('hex') };
   }
 
   /** La copia firmada para el firmante (con su sesión, que sigue vigente un rato tras firmar). */

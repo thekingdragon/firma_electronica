@@ -55,12 +55,13 @@ Cuerpo:
     "pdfSha256": "d2c124a1…",
     "documentPath": "/v1/requests/b4d04d47-…/document",
     "photoPath": "/v1/requests/b4d04d47-…/photo",
+    "idPhotoPath": "/v1/requests/b4d04d47-…/id-photo",
     "review": null
   }
 }
 ```
 
-- `documentPath` y `photoPath` son rutas de la API del servicio: se bajan con **su clave de API**
+- `documentPath`, `photoPath` e `idPhotoPath` son rutas de la API del servicio: se bajan con **su clave de API**
   (`X-Api-Key`). No hay enlaces firmados que puedan filtrarse. Son `null` si no aplican.
 - `review` trae `{ result, reviewedBy, note, reviewedAt }` en `signature.reviewed`; antes es `null`.
 - El cuerpo se **congela** al registrar el evento: un reintento envía exactamente lo mismo.

@@ -8,7 +8,7 @@
  *   npm run template:publish -w api -- --tenant <uuid> --photo false --photo-challenge false
  *
  * Opciones: --type (por defecto APPOINTMENT_LETTER), --clause-file, --annex-file («-» o vacío lo
- * quita con --no-annex), --otp, --photo, --photo-challenge y --legal-reviewed (true|false).
+ * quita con --no-annex), --otp, --photo, --photo-challenge, --id-photo y --legal-reviewed (true|false).
  * Los textos se leen de archivos UTF-8 para no pasar por la codificación de la terminal.
  */
 import { readFileSync } from 'node:fs';
@@ -42,7 +42,7 @@ function text(name: string): string | undefined {
 async function main(): Promise<void> {
   const config = loadConfig();
   const tenantId = arg('tenant');
-  if (!tenantId) throw new Error('Uso: --tenant <uuid> [--type APPOINTMENT_LETTER] [--clause-file f] [--annex-file f | --no-annex] [--otp bool] [--photo bool] [--photo-challenge bool] [--legal-reviewed bool]');
+  if (!tenantId) throw new Error('Uso: --tenant <uuid> [--type APPOINTMENT_LETTER] [--clause-file f] [--annex-file f | --no-annex] [--otp bool] [--photo bool] [--photo-challenge bool] [--id-photo bool] [--legal-reviewed bool]');
 
   const changes: TemplateChanges = {
     clauseText: text('clause-file'),
@@ -50,6 +50,7 @@ async function main(): Promise<void> {
     otpRequired: bool('otp'),
     photoRequired: bool('photo'),
     photoChallengeRequired: bool('photo-challenge'),
+    idPhotoRequired: bool('id-photo'),
     legalReviewed: bool('legal-reviewed'),
   };
   if (Object.values(changes).every((v) => v === undefined)) throw new Error('No indicó ningún cambio.');

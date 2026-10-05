@@ -7,7 +7,7 @@ import { ReviewStep } from './ReviewStep';
 import { SignApiError, loadSession, saveSession, signApi, type SignIntro, type SigningView, type SubmitResult, type Verified } from './signApi';
 import { VerifyStep } from './VerifyStep';
 
-type Step = 'loading' | 'closed' | 'verify' | 'document' | 'photo' | 'review' | 'done';
+type Step = 'loading' | 'closed' | 'verify' | 'document' | 'idphoto' | 'photo' | 'review' | 'done';
 
 const CLOSED_TITLES: Record<string, string> = {
   ALREADY_SIGNED: 'Este documento ya fue firmado',
@@ -36,6 +36,7 @@ export function SignPage() {
   const [view, setView] = useState<SigningView | null>(null);
   const [form, setForm] = useState<SignForm | null>(null);
   const [photo, setPhoto] = useState<TakenPhoto | null>(null);
+  const [idPhoto, setIdPhoto] = useState<TakenPhoto | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -113,7 +114,7 @@ export function SignPage() {
 
   function afterDocument() {
     setNotice(null);
-    setStep(view?.policy.photoRequired ? 'photo' : 'review');
+    setStep(view?.policy.idPhotoRequired ? 'idphoto' : view?.policy.photoRequired ? 'photo' : 'review');
   }
 
   async function sign() {
@@ -128,10 +129,13 @@ export function SignPage() {
       body.append('photo', photo.blob, 'foto.jpg');
       if (photo.challenge) body.append('challengeId', photo.challenge.challengeId);
     }
+    if (idPhoto) body.append('idPhoto', idPhoto.blob, 'documento.jpg');
     try {
       const r = await signApi.submit(token, session, body);
       if (photo) URL.revokeObjectURL(photo.url);
+      if (idPhoto) URL.revokeObjectURL(idPhoto.url);
       setPhoto(null);
+      setIdPhoto(null);
       setResult(r);
       setStep('done');
     } catch (e) {
@@ -143,6 +147,11 @@ export function SignPage() {
         setPhoto(null);
         setNotice(`${e.message}`);
         setStep('photo');
+      } else if (e.code === 'ID_PHOTO_TOO_SMALL' || e.code === 'ID_PHOTO_INVALID' || e.code === 'ID_PHOTO_REQUIRED') {
+        if (idPhoto) URL.revokeObjectURL(idPhoto.url);
+        setIdPhoto(null);
+        setNotice(e.message);
+        setStep('idphoto');
       } else if (e.code === 'PHOTO_TOO_SMALL' || e.code === 'PHOTO_INVALID' || e.code === 'PHOTO_REQUIRED') {
         if (photo) URL.revokeObjectURL(photo.url);
         setPhoto(null);
@@ -172,7 +181,8 @@ export function SignPage() {
   const labels: { id: Step; label: string }[] = [];
   if (intro?.otpRequired) labels.push({ id: 'verify', label: 'Verificación' });
   labels.push({ id: 'document', label: 'Documento' });
-  if (view?.policy.photoRequired ?? true) labels.push({ id: 'photo', label: 'Fotografía' });
+  if (view?.policy.idPhotoRequired) labels.push({ id: 'idphoto', label: 'Documento' });
+  if (view?.policy.photoRequired ?? true) labels.push({ id: 'photo', label: view?.policy.idPhotoRequired ? 'Selfie' : 'Fotografía' });
   labels.push({ id: 'review', label: 'Firma' });
   const current = labels.findIndex((l) => l.id === step);
 
@@ -212,7 +222,27 @@ export function SignPage() {
           form={form}
           onChange={setForm}
           onContinue={afterDocument}
-          continueLabel={view.policy.photoRequired ? 'Continuar: tomar mi foto' : 'Continuar'}
+          continueLabel={view.policy.photoRequired ? 'Continuar: tomar mis fotos' : 'Continuar'}
+        />
+      )}
+
+      {step === 'idphoto' && view && session && (
+        <PhotoStep
+          kind="document"
+          token={token}
+          session={session}
+          view={view}
+          initial={idPhoto}
+          onBack={() => {
+            setNotice(null);
+            setStep('document');
+          }}
+          onTaken={(p) => {
+            setIdPhoto(p);
+            setNotice(null);
+            setStep('photo');
+          }}
+          onSessionExpired={() => toVerify('Su sesión venció. Verifique su código otra vez.')}
         />
       )}
 
@@ -224,7 +254,7 @@ export function SignPage() {
           initial={photo}
           onBack={() => {
             setNotice(null);
-            setStep('document');
+            setStep(view.policy.idPhotoRequired ? 'idphoto' : 'document');
           }}
           onTaken={(p) => {
             setPhoto(p);
@@ -240,6 +270,7 @@ export function SignPage() {
           view={view}
           form={form}
           photo={photo}
+          idPhoto={idPhoto}
           busy={submitting}
           error={submitError}
           onBack={() => {

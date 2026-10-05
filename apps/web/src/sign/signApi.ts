@@ -35,7 +35,7 @@ export interface SigningView {
   content: { powers?: PowerDef[]; observation?: { maxLength?: number }; texts?: Record<string, string> };
   annexText: string | null;
   clause: { version: number; text: string };
-  policy: { photoRequired: boolean; photoChallengeRequired: boolean };
+  policy: { photoRequired: boolean; photoChallengeRequired: boolean; idPhotoRequired: boolean };
   expiresAt: string;
 }
 

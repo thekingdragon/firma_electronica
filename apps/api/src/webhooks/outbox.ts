@@ -16,6 +16,7 @@ interface Row {
   pdf_sha256: string | null;
   url: string | null;
   has_photo: boolean | null;
+  has_id_photo: boolean | null;
   review_result: string | null;
   reviewed_by: string | null;
   review_note: string | null;
@@ -36,6 +37,7 @@ export async function enqueueWebhook(db: Db, requestId: string, event: WebhookEv
     `SELECT r.id, r.reference, r.document_type, r.external_ref, r.status, r.signed_at, r.pdf_sha256,
             COALESCE(r.webhook_url, t.webhook_url) AS url,
             (e.photo_path IS NOT NULL) AS has_photo,
+            (e.id_photo_path IS NOT NULL) AS has_id_photo,
             e.review_result, e.reviewed_by, e.review_note, e.reviewed_at
        FROM signature_requests r
        JOIN tenants t ON t.id = r.tenant_id
@@ -62,6 +64,7 @@ export async function enqueueWebhook(db: Db, requestId: string, event: WebhookEv
       // Rutas de la propia API: el host baja los archivos con SU clave. No hay URLs firmadas que filtrar.
       documentPath: r.status === 'SIGNED' ? `/v1/requests/${r.id}/document` : null,
       photoPath: r.has_photo ? `/v1/requests/${r.id}/photo` : null,
+      idPhotoPath: r.has_id_photo ? `/v1/requests/${r.id}/id-photo` : null,
       review: r.review_result
         ? { result: r.review_result, reviewedBy: r.reviewed_by, note: r.review_note, reviewedAt: r.reviewed_at?.toISOString() ?? null }
         : null,

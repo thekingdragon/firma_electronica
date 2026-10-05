@@ -37,7 +37,7 @@ export interface SigningView {
   content: Record<string, unknown>;
   annexText: string | null;
   clause: { version: number; text: string };
-  policy: { photoRequired: boolean; photoChallengeRequired: boolean };
+  policy: { photoRequired: boolean; photoChallengeRequired: boolean; idPhotoRequired: boolean };
   expiresAt: string;
 }
 
@@ -61,6 +61,7 @@ export interface LinkRow {
   clause_text: string;
   photo_required: boolean;
   photo_challenge_required: boolean;
+  id_photo_required: boolean;
 }
 
 const TOKEN_FORMAT = /^[A-Za-z0-9_-]{43}$/;
@@ -98,7 +99,7 @@ export class SignService {
               r.otp_channel, r.otp_to, r.snapshot,
               t.legal_name, t.registry_code,
               d.version AS template_version, d.body_json, d.annex_text, d.clause_text,
-              d.photo_required, d.photo_challenge_required
+              d.photo_required, d.photo_challenge_required, d.id_photo_required
          FROM signature_requests r
          JOIN tenants t ON t.id = r.tenant_id
          JOIN document_templates d ON d.id = r.template_id
@@ -297,7 +298,7 @@ export class SignService {
       content: resolveContent(row.document_type, row.body_json),
       annexText: row.annex_text,
       clause: { version: row.template_version, text: row.clause_text },
-      policy: { photoRequired: row.photo_required, photoChallengeRequired: row.photo_challenge_required },
+      policy: { photoRequired: row.photo_required, photoChallengeRequired: row.photo_challenge_required, idPhotoRequired: row.id_photo_required },
       expiresAt: row.expires_at.toISOString(),
     };
   }

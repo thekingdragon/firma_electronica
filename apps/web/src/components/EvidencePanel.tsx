@@ -13,10 +13,76 @@ function deviceOf(ua: string | null): string {
   return [browser, os].filter(Boolean).join(' en ') + mobile || 'desconocido';
 }
 
-type PhotoState =
-  | { kind: 'loading' }
-  | { kind: 'ready'; url: string }
-  | { kind: 'none'; message: string };
+type PhotoInfo = NonNullable<Evidence['photo']>;
+
+/**
+ * Una foto de la evidencia: se baja con la clave en una cabecera (por eso va por fetch y no por <img src>),
+ * se muestra como miniatura y, al pulsarla, se abre ampliada sobre toda la pantalla (Escape o clic la cierran).
+ */
+function EvidencePhoto({
+  info,
+  fetchPhoto,
+  alt,
+  emptyMessage,
+}: {
+  info: PhotoInfo | null;
+  fetchPhoto: () => Promise<Blob>;
+  alt: string;
+  emptyMessage: string;
+}) {
+  const [state, setState] = useState<
+    { kind: 'loading' } | { kind: 'ready'; url: string } | { kind: 'none'; message: string }
+  >({ kind: 'loading' });
+  const [zoomed, setZoomed] = useState(false);
+
+  useEffect(() => {
+    if (!info) {
+      setState({ kind: 'none', message: emptyMessage });
+      return;
+    }
+    if (info.deletedAt) {
+      setState({ kind: 'none', message: `La foto se borró el ${formatDateTime(info.deletedAt)} al vencer el plazo de retención. Quedan su huella y la constancia.` });
+      return;
+    }
+    let url: string | null = null;
+    let cancelled = false;
+    fetchPhoto()
+      .then((blob) => {
+        if (cancelled) return;
+        url = URL.createObjectURL(blob);
+        setState({ kind: 'ready', url });
+      })
+      .catch((e: Error) => !cancelled && setState({ kind: 'none', message: e.message }));
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [info?.sha256, info?.deletedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!zoomed) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setZoomed(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [zoomed]);
+
+  if (state.kind === 'loading') return <div className="photo-box muted">Cargando la foto…</div>;
+  if (state.kind === 'none') return <div className="photo-box muted">{state.message}</div>;
+  return (
+    <>
+      <button type="button" className="photo-zoom" onClick={() => setZoomed(true)} title="Ampliar la foto">
+        <img className="photo-box" src={state.url} alt={alt} />
+      </button>
+      <p className="hint">Toque la foto para verla en grande.</p>
+      {zoomed && (
+        <div className="lightbox" role="dialog" aria-modal="true" aria-label="Fotografía ampliada" onClick={() => setZoomed(false)}>
+          <button type="button" className="lightbox-close" onClick={() => setZoomed(false)} aria-label="Cerrar">×</button>
+          <img src={state.url} alt={`${alt}, ampliada`} />
+        </div>
+      )}
+    </>
+  );
+}
 
 /**
  * Lo que una persona del corredor necesita para decidir si la identidad del firmante le convence:
@@ -36,10 +102,8 @@ export function EvidencePanel({
   const { apiKey } = useSession();
   const [ev, setEv] = useState<Evidence | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [photo, setPhoto] = useState<PhotoState>({ kind: 'loading' });
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
-  const [zoomed, setZoomed] = useState(false);
 
   const load = useCallback(() => {
     api
@@ -49,41 +113,6 @@ export function EvidencePanel({
   }, [apiKey, requestId]);
 
   useEffect(load, [load]);
-
-  // Foto ampliada: se cierra con Escape.
-  useEffect(() => {
-    if (!zoomed) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setZoomed(false);
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [zoomed]);
-
-  // La foto va por fetch con la clave en una cabecera: se convierte en una URL local para mostrarla.
-  useEffect(() => {
-    if (!ev) return;
-    if (!ev.photo) {
-      setPhoto({ kind: 'none', message: 'Este documento no pidió fotografía.' });
-      return;
-    }
-    if (ev.photo.deletedAt) {
-      setPhoto({ kind: 'none', message: `La foto se borró el ${formatDateTime(ev.photo.deletedAt)} al vencer el plazo de retención. Quedan su huella y la constancia.` });
-      return;
-    }
-    let url: string | null = null;
-    let cancelled = false;
-    api
-      .photo(apiKey, requestId)
-      .then((blob) => {
-        if (cancelled) return;
-        url = URL.createObjectURL(blob);
-        setPhoto({ kind: 'ready', url });
-      })
-      .catch((e: Error) => !cancelled && setPhoto({ kind: 'none', message: e.message }));
-    return () => {
-      cancelled = true;
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [apiKey, requestId, ev?.photo?.sha256, ev?.photo?.deletedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function downloadPdf() {
     if (!ev) return;
@@ -124,22 +153,24 @@ export function EvidencePanel({
         <h2>Revisión de identidad</h2>
         <div className="review-grid">
           <div>
-            {photo.kind === 'loading' && <div className="photo-box muted">Cargando la foto…</div>}
-            {photo.kind === 'ready' && (
+            <p className="checklist-title">Selfie con el número</p>
+            <EvidencePhoto
+              info={ev.photo}
+              fetchPhoto={() => api.photo(apiKey, requestId)}
+              alt={`Selfie de verificación de ${signerName}`}
+              emptyMessage="Este documento no pidió fotografía."
+            />
+            {ev.idPhoto && (
               <>
-                <button type="button" className="photo-zoom" onClick={() => setZoomed(true)} title="Ampliar la foto">
-                  <img className="photo-box" src={photo.url} alt={`Fotografía de verificación de ${signerName}`} />
-                </button>
-                <p className="hint">Toque la foto para verla en grande.</p>
-                {zoomed && (
-                  <div className="lightbox" role="dialog" aria-modal="true" aria-label="Fotografía ampliada" onClick={() => setZoomed(false)}>
-                    <button type="button" className="lightbox-close" onClick={() => setZoomed(false)} aria-label="Cerrar">×</button>
-                    <img src={photo.url} alt={`Fotografía de verificación de ${signerName}, ampliada`} />
-                  </div>
-                )}
+                <p className="checklist-title">Documento de identidad</p>
+                <EvidencePhoto
+                  info={ev.idPhoto}
+                  fetchPhoto={() => api.idPhoto(apiKey, requestId)}
+                  alt={`Documento de identidad de ${signerName}`}
+                  emptyMessage="No hay foto del documento."
+                />
               </>
             )}
-            {photo.kind === 'none' && <div className="photo-box muted">{photo.message}</div>}
           </div>
           <div>
             {ev.challenge && (
@@ -150,7 +181,13 @@ export function EvidencePanel({
             )}
             <p className="checklist-title">Antes de decidir, compruebe en la foto:</p>
             <ul className="checklist">
-              <li>Que el <strong>rostro</strong> se vea claro, de una sola persona, tomado en el momento.</li>
+              <li>Que el <strong>rostro</strong> de la selfie se vea claro, de una sola persona, tomado en el momento.</li>
+              {ev.idPhoto && (
+                <>
+                  <li>Que el rostro de la selfie <strong>sea el de la foto del documento</strong>.</li>
+                  <li>Que el documento sea de <strong>{ev.signer.name}</strong> ({ev.signer.documentType} {ev.signer.documentNumber}) y se lea con claridad.</li>
+                </>
+              )}
               {ev.challenge && <li>Que el papel muestre <strong>exactamente {ev.challenge.code}</strong>, escrito a mano.</li>}
             </ul>
             <p className="hint">Esta revisión es manual: el servicio todavía no compara el rostro ni lee el código automáticamente.</p>
@@ -183,6 +220,16 @@ export function EvidencePanel({
                 {ev.photo.width}×{ev.photo.height} px{ev.photo.receivedAt ? `, recibida el ${formatDateTimeSeconds(ev.photo.receivedAt)}` : ''}
                 <br />
                 <code className="hash">{ev.photo.sha256}</code>
+              </dd>
+            </>
+          )}
+          {ev.idPhoto && (
+            <>
+              <dt>Foto del documento</dt>
+              <dd>
+                {ev.idPhoto.width}×{ev.idPhoto.height} px{ev.idPhoto.receivedAt ? `, recibida el ${formatDateTimeSeconds(ev.idPhoto.receivedAt)}` : ''}
+                <br />
+                <code className="hash">{ev.idPhoto.sha256}</code>
               </dd>
             </>
           )}

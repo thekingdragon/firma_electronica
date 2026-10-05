@@ -129,6 +129,14 @@ export const renderAppointmentLetter: DocumentRenderer = async (input: RenderInp
     const img = ph.type === 'png' ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
     f.image(img, 170, 130);
   }
+  if (input.evidence.idPhoto) {
+    const ip = input.evidence.idPhoto;
+    f.field('Fotografía del documento de identidad:', `${ip.width}×${ip.height} px · SHA-256 ${ip.sha256}`);
+    f.gap(4);
+    const bytes = new Uint8Array(ip.bytes);
+    const img = ip.type === 'png' ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
+    f.image(img, 170, 130);
+  }
 
   f.footers(`${input.reference}  ·  Documento firmado electrónicamente`);
   return doc.save();

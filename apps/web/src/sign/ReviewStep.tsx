@@ -6,6 +6,7 @@ export function ReviewStep({
   view,
   form,
   photo,
+  idPhoto,
   busy,
   error,
   onBack,
@@ -14,6 +15,7 @@ export function ReviewStep({
   view: SigningView;
   form: SignForm;
   photo: TakenPhoto | null;
+  idPhoto: TakenPhoto | null;
   busy: boolean;
   error: string | null;
   onBack: () => void;
@@ -44,6 +46,12 @@ export function ReviewStep({
         <strong>Seguros:</strong> {(view.data.insurances ?? []).join(' · ')}
       </p>
 
+      {idPhoto && (
+        <div className="review-photo">
+          <img src={idPhoto.url} alt="Foto de su documento" />
+          <div className="muted small">Foto de su documento</div>
+        </div>
+      )}
       {photo && (
         <div className="review-photo">
           <img src={photo.url} alt="Su fotografía" />

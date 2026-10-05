@@ -151,7 +151,7 @@ oficial; no se comprobó si fue modificada después de 2019):
 - Art. 32.1: la carta no faculta actos de disposición; los actos se hacen con coordinación y
   autorización previas. Arts. 32.4–32.5: el Anexo y el modelo se entregan al cliente. Art. 45:
   copia suscrita en el expediente del cliente.
-- **No hay exigencia de foto del DNI** ni de un mecanismo de identidad concreto.
+- **No hay exigencia de foto del DNI** ni de un mecanismo de identidad concreto. El servicio la pide igual (segunda foto, `id_photo_required`, migración 0005) para que la revisión humana pueda comparar el rostro con el documento; es una decisión de diseño, no un requisito de la SBS.
 
 **Sin leer en texto primario:** Ley 27269 y DS 052-2008-PCM (según resúmenes, una firma generada
 fuera de la infraestructura oficial vale según lo pactado entre las partes).

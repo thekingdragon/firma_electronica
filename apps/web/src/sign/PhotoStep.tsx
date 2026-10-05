@@ -25,6 +25,7 @@ function useSecondsUntil(iso: string | null): number {
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 export function PhotoStep({
+  kind = 'selfie',
   token,
   session,
   view,
@@ -33,6 +34,8 @@ export function PhotoStep({
   onTaken,
   onSessionExpired,
 }: {
+  /** `selfie`: el rostro con el papel y el código. `document`: solo el documento de identidad. */
+  kind?: 'selfie' | 'document';
   token: string;
   session: string;
   view: SigningView;
@@ -47,7 +50,8 @@ export function PhotoStep({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const left = useSecondsUntil(challenge?.expiresAt ?? null);
-  const needsChallenge = view.policy.photoChallengeRequired;
+  const isDocument = kind === 'document';
+  const needsChallenge = !isDocument && view.policy.photoChallengeRequired;
   const expired = needsChallenge && challenge !== null && left === 0;
   const requested = useRef(false);
 
@@ -105,10 +109,18 @@ export function PhotoStep({
 
   return (
     <section className="card">
-      <h2>Su fotografía</h2>
-      <p>
-        Para confirmar que es usted quien firma ahora, tómese una foto de su rostro (selfie) <strong>en este momento</strong>, sosteniendo el papel con el número. No se puede subir una foto guardada.
-      </p>
+      <h2>{isDocument ? 'Foto de su documento' : 'Su fotografía'}</h2>
+      {isDocument ? (
+        <p>
+          Tómele una foto a su <strong>{view.signer.documentType}</strong> (la cara donde se ve su foto y su número) <strong>en este
+          momento</strong>. Ponga el documento sobre una superficie plana, con buena luz. No se puede subir una foto guardada.
+        </p>
+      ) : (
+        <p>
+          Para confirmar que es usted quien firma ahora, tómese una foto de su rostro (selfie) <strong>en este momento</strong>,
+          sosteniendo el papel con el número. No se puede subir una foto guardada.
+        </p>
+      )}
 
       {needsChallenge && (
         <div className={`challenge${expired ? ' expired' : ''}`} aria-live="polite">
@@ -130,7 +142,11 @@ export function PhotoStep({
       )}
 
       <ul className="tips">
-        <li>Que se vean claros su rostro y el papel con el número.</li>
+        {isDocument ? (
+          <li>Que el documento se vea completo y se lean con claridad su número y sus datos.</li>
+        ) : (
+          <li>Que se vean claros su rostro y el papel con el número.</li>
+        )}
         <li>Busque buena luz y evite reflejos.</li>
       </ul>
 

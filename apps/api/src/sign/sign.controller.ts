@@ -8,11 +8,11 @@ import {
   Post,
   Req,
   Res,
-  UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import { memoryStorage } from 'multer';
 import { PublicRateLimitGuard, RateBucketOf } from '../common/rate-limit';
@@ -70,16 +70,16 @@ export class SignController {
   @RateBucketOf('submit')
   @HttpCode(200)
   @UseInterceptors(
-    FileInterceptor('photo', {
+    FileFieldsInterceptor([{ name: 'photo', maxCount: 1 }, { name: 'idPhoto', maxCount: 1 }], {
       storage: memoryStorage(),
       // Un archivo, de tamaño acotado: lo que llega por la red no es de fiar.
-      limits: { fileSize: PHOTO_POLICY.maxBytes, files: 1, fields: 10, fieldSize: 20_000 },
+      limits: { fileSize: PHOTO_POLICY.maxBytes, files: 2, fields: 10, fieldSize: 20_000 },
     }),
   )
   submit(
     @Param('token') token: string,
     @Headers('x-session') session: string | undefined,
-    @UploadedFile() photo: Express.Multer.File | undefined,
+    @UploadedFiles() files: { photo?: Express.Multer.File[]; idPhoto?: Express.Multer.File[] } | undefined,
     @Body() body: Record<string, unknown> | undefined,
     @Req() req: Request,
   ): Promise<SubmitResult> {
@@ -87,7 +87,8 @@ export class SignController {
       token,
       session,
       {
-        photo: photo?.buffer,
+        photo: files?.photo?.[0]?.buffer,
+        idPhoto: files?.idPhoto?.[0]?.buffer,
         challengeId: typeof body?.challengeId === 'string' ? body.challengeId : undefined,
         accepted: body?.accepted,
         form: body?.form,

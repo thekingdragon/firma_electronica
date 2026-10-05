@@ -108,6 +108,7 @@ export interface Evidence {
   signer: { name: string; documentType: string; documentNumber: string };
   otp: { verifiedAt: string; attempts: number } | null;
   photo: { width: number; height: number; sha256: string; receivedAt: string | null; deletedAt: string | null } | null;
+  idPhoto: { width: number; height: number; sha256: string; receivedAt: string | null; deletedAt: string | null } | null;
   challenge: { code: string; issuedAt: string } | null;
   form: { powers?: string[]; observation?: string } | null;
   clauseText: string;
@@ -174,4 +175,5 @@ export const api = {
     call<{ result: ReviewResult; reviewedAt: string }>('POST', `/v1/requests/${id}/review`, key, body).then((r) => r.data),
   document: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/document`, key),
   photo: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/photo`, key),
+  idPhoto: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/id-photo`, key),
 };

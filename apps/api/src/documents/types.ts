@@ -17,6 +17,8 @@ export interface RenderInput {
     otpVerifiedAt: Date | null;
     challengeCode: string | null;
     photo: { bytes: Buffer; type: 'jpeg' | 'png'; width: number; height: number; sha256: string } | null;
+    /** Foto del documento de identidad; `undefined` si la plantilla no la pide. */
+    idPhoto?: { bytes: Buffer; type: 'jpeg' | 'png'; width: number; height: number; sha256: string } | null;
   };
 }
 
