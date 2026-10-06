@@ -99,6 +99,28 @@ export function useCamera() {
     }
   }, []);
 
+  /** Congela la imagen sin soltar la cámara: repetir la foto no vuelve a pedir permiso. */
+  const hold = useCallback(() => {
+    videoRef.current?.pause();
+  }, []);
+
+  /** Reanuda la vista previa; si la cámara ya se soltó, la abre de nuevo. */
+  const resume = useCallback(
+    async (facingMode: 'user' | 'environment') => {
+      const live = streamRef.current?.getVideoTracks().some((t) => t.readyState === 'live');
+      if (live && videoRef.current) {
+        try {
+          await videoRef.current.play();
+          return;
+        } catch {
+          /* cae a abrirla de nuevo */
+        }
+      }
+      await start(facingMode);
+    },
+    [start],
+  );
+
   /** Toma el cuadro actual con la resolución real del video, sin espejar (lo que se ve es solo la vista previa). */
   const capture = useCallback(async (crop: 'card' | null = null): Promise<Captured> => {
     const video = videoRef.current;
@@ -120,7 +142,7 @@ export function useCamera() {
     return { blob, width: canvas.width, height: canvas.height };
   }, []);
 
-  return { videoRef, state, mirrored, aspect, start, stop, capture };
+  return { videoRef, state, mirrored, aspect, start, stop, hold, resume, capture };
 }
 
 /** Piso de resolución que el servidor exige (ver PHOTO_POLICY): avisar antes de enviar ahorra un viaje. */

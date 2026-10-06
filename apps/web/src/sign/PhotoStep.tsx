@@ -65,13 +65,15 @@ export function PhotoStep({
         if (prev) URL.revokeObjectURL(prev.url);
         return null;
       });
+      // La foto anterior se descartó: si la cámara sigue abierta, vuelve la vista previa.
+      if (cam.state.status === 'ready') void cam.resume('user');
     } catch (e) {
       if (e instanceof SignApiError && e.status === 401) onSessionExpired();
       setError(e instanceof Error ? e.message : 'No se pudo obtener el código.');
     } finally {
       setBusy(false);
     }
-  }, [token, session, onSessionExpired]);
+  }, [token, session, onSessionExpired, cam]);
 
   // El código se pide una sola vez al entrar (y a mano si vence o se quiere otro).
   useEffect(() => {
@@ -90,7 +92,9 @@ export function PhotoStep({
         if (prev) URL.revokeObjectURL(prev.url);
         return { ...c, url, challenge };
       });
-      cam.stop();
+      // La cámara queda abierta (solo se congela) mientras mira la foto: si la repite no se vuelve a pedir
+      // permiso. Se suelta al salir de este paso.
+      cam.hold();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo tomar la foto.');
     }
@@ -101,7 +105,7 @@ export function PhotoStep({
       if (prev) URL.revokeObjectURL(prev.url);
       return null;
     });
-    void cam.start(isDocument ? 'environment' : 'user');
+    void cam.resume(isDocument ? 'environment' : 'user');
   }
 
   const tooSmall = shot ? !meetsMinimum(shot.width, shot.height, isDocument ? 'id' : 'selfie') : false;
@@ -171,7 +175,7 @@ export function PhotoStep({
               playsInline
               muted
               style={videoStyle}
-              className={`camera-video${cameraOn ? '' : ' hidden'}${cam.mirrored ? ' mirrored' : ''}`}
+              className={`camera-video${cameraOn && !shot ? '' : ' hidden'}${cam.mirrored ? ' mirrored' : ''}`}
             />
             {shot && <img className="camera-shot" src={shot.url} alt="Su fotografía tomada" />}
             {!cameraOn && !shot && <div className="camera-placeholder">La cámara está apagada</div>}
@@ -179,7 +183,7 @@ export function PhotoStep({
         );
       })()}
 
-      {cam.state.status === 'ready' && cam.mirrored && (
+      {cam.state.status === 'ready' && cam.mirrored && !shot && (
         <p className="hint">La vista previa se ve como un espejo; la foto saldrá normal y el número se leerá bien.</p>
       )}
       {cam.state.status === 'error' && <p className="error" role="alert">{cam.state.message}</p>}
