@@ -151,7 +151,7 @@ export function EvidencePanel({
 
       <div className="card">
         <h2>Revisión de identidad</h2>
-        <div className="review-grid">
+        <div className="review-photos">
           <div>
             <p className="checklist-title">Selfie con el número</p>
             <EvidencePhoto
@@ -160,18 +160,18 @@ export function EvidencePanel({
               alt={`Selfie de verificación de ${signerName}`}
               emptyMessage="Este documento no pidió fotografía."
             />
-            {ev.idPhoto && (
-              <>
-                <p className="checklist-title">Documento de identidad</p>
-                <EvidencePhoto
-                  info={ev.idPhoto}
-                  fetchPhoto={() => api.idPhoto(apiKey, requestId)}
-                  alt={`Documento de identidad de ${signerName}`}
-                  emptyMessage="No hay foto del documento."
-                />
-              </>
-            )}
           </div>
+          <div>
+            <p className="checklist-title">Documento de identidad</p>
+            <EvidencePhoto
+              info={ev.idPhoto}
+              fetchPhoto={() => api.idPhoto(apiKey, requestId)}
+              alt={`Documento de identidad de ${signerName}`}
+              emptyMessage="Esta firma no tiene foto del documento: se hizo antes de que se pidiera."
+            />
+          </div>
+        </div>
+        <div className="review-check">
           <div>
             {ev.challenge && (
               <div className="challenge-check">

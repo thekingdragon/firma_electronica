@@ -667,6 +667,15 @@ code.hash {
   font-size: 0.78rem;
   word-break: break-all;
 }
+.review-photos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+.review-check {
+  margin-top: 1rem;
+}
 .review-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
@@ -782,6 +791,9 @@ div.photo-box {
 }
 
 @media (max-width: 600px) {
+  .review-photos {
+    grid-template-columns: 1fr;
+  }
   .review-grid {
     grid-template-columns: 1fr;
   }
