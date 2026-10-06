@@ -181,7 +181,7 @@ export function SignPage() {
   const labels: { id: Step; label: string }[] = [];
   if (intro?.otpRequired) labels.push({ id: 'verify', label: 'Verificación' });
   labels.push({ id: 'document', label: 'Documento' });
-  if (view?.policy.idPhotoRequired) labels.push({ id: 'idphoto', label: 'Documento' });
+  if (view?.policy.idPhotoRequired) labels.push({ id: 'idphoto', label: `Foto ${view.signer.documentType}` });
   if (view?.policy.photoRequired ?? true) labels.push({ id: 'photo', label: view?.policy.idPhotoRequired ? 'Selfie' : 'Fotografía' });
   labels.push({ id: 'review', label: 'Firma' });
   const current = labels.findIndex((l) => l.id === step);

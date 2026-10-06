@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SignApiError, signApi, type Challenge, type SigningView } from './signApi';
-import { cardFrame, meetsMinimum, useCamera, type Captured } from './useCamera';
+import { CARD_ASPECT, cardFrame, meetsMinimum, useCamera, type Captured } from './useCamera';
 
 export interface TakenPhoto extends Captured {
   url: string;
@@ -150,28 +150,34 @@ export function PhotoStep({
         <li>Busque buena luz y evite reflejos.</li>
       </ul>
 
-      <div className="camera" style={{ aspectRatio: String(shot ? shot.width / shot.height : (cam.aspect ?? 4 / 3)) }}>
-        {/* Siempre montado para poder asignar el stream; se oculta si no hay cámara activa. */}
-        <video
-          ref={cam.videoRef}
-          playsInline
-          muted
-          className={`camera-video${cameraOn ? '' : ' hidden'}${cam.mirrored ? ' mirrored' : ''}`}
-        />
-        {isDocument && cameraOn && !shot && cam.aspect && (() => {
-          // Marco guía: lo de afuera se atenúa y la foto guarda solo lo de adentro.
-          const f = cardFrame(cam.aspect, 1);
-          return (
-            <div
-              className="camera-guide"
-              aria-hidden="true"
-              style={{ width: `${(f.w / cam.aspect) * 100}%`, height: `${f.h * 100}%` }}
+      {(() => {
+        // La caja tiene SIEMPRE la proporción de lo que se va a guardar: lo que se ve es lo que queda en la foto.
+        // Documento: solo el recorte al marco de un DNI (la vista previa muestra únicamente esa zona).
+        // Selfie: el cuadro completo de la cámara.
+        const frame = isDocument && cam.aspect ? cardFrame(cam.aspect, 1) : null;
+        const boxAspect = shot ? shot.width / shot.height : isDocument ? CARD_ASPECT : (cam.aspect ?? 4 / 3);
+        const videoStyle =
+          frame && cam.aspect
+            ? { width: `${(cam.aspect / frame.w) * 100}%`, height: `${(1 / frame.h) * 100}%` }
+            : undefined;
+        return (
+          <div
+            className={`camera${isDocument ? ' camera-doc' : ''}`}
+            style={{ aspectRatio: String(boxAspect), width: `min(100%, calc(70vh * ${boxAspect}))` }}
+          >
+            {/* Siempre montado para poder asignar el stream; se oculta si no hay cámara activa. */}
+            <video
+              ref={cam.videoRef}
+              playsInline
+              muted
+              style={videoStyle}
+              className={`camera-video${cameraOn ? '' : ' hidden'}${cam.mirrored ? ' mirrored' : ''}`}
             />
-          );
-        })()}
-        {shot && <img className="camera-shot" src={shot.url} alt="Su fotografía tomada" />}
-        {!cameraOn && !shot && <div className="camera-placeholder">La cámara está apagada</div>}
-      </div>
+            {shot && <img className="camera-shot" src={shot.url} alt="Su fotografía tomada" />}
+            {!cameraOn && !shot && <div className="camera-placeholder">La cámara está apagada</div>}
+          </div>
+        );
+      })()}
 
       {cam.state.status === 'ready' && cam.mirrored && (
         <p className="hint">La vista previa se ve como un espejo; la foto saldrá normal y el número se leerá bien.</p>
@@ -180,7 +186,7 @@ export function PhotoStep({
       {error && <p className="error" role="alert">{error}</p>}
       {tooSmall && shot && (
         <p className="error" role="alert">
-          La foto salió muy pequeña ({shot.width}×{shot.height}). Pruebe con otro dispositivo o navegador: se necesita al menos 1280×720.
+          La foto salió muy pequeña ({shot.width}×{shot.height}). Pruebe con otro dispositivo o navegador: se necesita al menos {isDocument ? '1000×600' : '1280×720'}.
         </p>
       )}
 

@@ -595,7 +595,6 @@ tbody tr:last-child td {
   border-radius: 12px;
   overflow: hidden;
   aspect-ratio: 4 / 3;
-  max-height: 70vh;
   margin-inline: auto;
   display: flex;
   align-items: center;
@@ -610,17 +609,6 @@ tbody tr:last-child td {
 }
 .camera-video.mirrored {
   transform: scaleX(-1);
-}
-.camera-guide {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  border: 2px solid #fff;
-  border-radius: 10px;
-  /* Atenúa todo lo que queda fuera del marco: es lo que NO se guarda. */
-  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.55);
-  pointer-events: none;
 }
 .camera-placeholder {
   color: #9aa5b5;
@@ -833,4 +821,23 @@ div.photo-box {
   background: none;
   border: 0;
   cursor: pointer;
+}
+
+/* Documento: el video es MÁS GRANDE que la caja y va centrado; la caja (overflow: hidden) deja ver solo el recorte. */
+.camera-doc {
+  border: 2px solid #fff;
+}
+.camera-doc .camera-video {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  object-fit: fill;
+  max-width: none;
+  transform: translate(-50%, -50%);
+}
+.camera-doc .camera-video.mirrored {
+  transform: translate(-50%, -50%) scaleX(-1);
+}
+.camera-doc .camera-video.hidden {
+  display: none;
 }
