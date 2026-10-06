@@ -22,9 +22,9 @@ export const CARD_ASPECT = 85.6 / 54;
  * Marco guía del documento dentro de un cuadro de `width`×`height`: el mayor rectángulo con proporción de
  * tarjeta que cabe con un margen. La vista previa lo dibuja y la captura recorta EXACTAMENTE esto.
  */
-export function cardFrame(width: number, height: number): { w: number; h: number } {
-  const w = Math.min(width * 0.96, height * 0.96 * CARD_ASPECT);
-  return { w, h: w / CARD_ASPECT };
+export function cardFrame(width: number, height: number, aspect: number = CARD_ASPECT): { w: number; h: number } {
+  const w = Math.min(width * 0.96, height * 0.96 * aspect);
+  return { w, h: w / aspect };
 }
 
 /** Mensaje que el firmante puede entender y accionar, por tipo de fallo de la cámara. */
@@ -155,12 +155,12 @@ export function useCamera() {
   );
 
   /** Toma el cuadro actual con la resolución real del video, sin espejar (lo que se ve es solo la vista previa). */
-  const capture = useCallback(async (crop: 'card' | null = null): Promise<Captured> => {
+  const capture = useCallback(async (crop: number | null = null): Promise<Captured> => {
     const video = videoRef.current;
     if (!video || !video.videoWidth) throw new Error('La cámara todavía no está lista.');
     // Con `crop: 'card'` se guarda solo lo que queda dentro del marco guía, no el cuadro completo.
     const full = { w: video.videoWidth, h: video.videoHeight };
-    const frame = crop === 'card' ? cardFrame(full.w, full.h) : full;
+    const frame = crop ? cardFrame(full.w, full.h, crop) : full;
     const out = { w: Math.round(frame.w), h: Math.round(frame.h) };
     const sx = Math.round((full.w - out.w) / 2);
     const sy = Math.round((full.h - out.h) / 2);

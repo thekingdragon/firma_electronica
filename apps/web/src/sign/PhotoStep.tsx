@@ -51,6 +51,8 @@ export function PhotoStep({
   const [busy, setBusy] = useState(false);
   const left = useSecondsUntil(challenge?.expiresAt ?? null);
   const isDocument = kind === 'document';
+  // Selfie: caja y recorte verticales (4:5), lo justo para que entre una cabeza y algo más. Documento: forma de tarjeta.
+  const frameAspect = isDocument ? CARD_ASPECT : 0.8;
   const needsChallenge = !isDocument && view.policy.photoChallengeRequired;
   const expired = needsChallenge && challenge !== null && left === 0;
   const requested = useRef(false);
@@ -96,7 +98,7 @@ export function PhotoStep({
   async function take() {
     setError(null);
     try {
-      const c = await cam.capture(isDocument ? 'card' : null);
+      const c = await cam.capture(frameAspect);
       const url = URL.createObjectURL(c.blob);
       setShot((prev) => {
         if (prev) URL.revokeObjectURL(prev.url);
@@ -168,15 +170,15 @@ export function PhotoStep({
         // La caja tiene SIEMPRE la proporción de lo que se va a guardar: lo que se ve es lo que queda en la foto.
         // Documento: solo el recorte al marco de un DNI (la vista previa muestra únicamente esa zona).
         // Selfie: el cuadro completo de la cámara.
-        const frame = isDocument && cam.aspect ? cardFrame(cam.aspect, 1) : null;
-        const boxAspect = shot ? shot.width / shot.height : isDocument ? CARD_ASPECT : (cam.aspect ?? 4 / 3);
+        const frame = cam.aspect ? cardFrame(cam.aspect, 1, frameAspect) : null;
+        const boxAspect = shot ? shot.width / shot.height : frameAspect;
         const videoStyle =
           frame && cam.aspect
             ? { width: `${(cam.aspect / frame.w) * 100}%`, height: `${(1 / frame.h) * 100}%` }
             : undefined;
         return (
           <div
-            className={`camera${isDocument ? ' camera-doc' : ''}`}
+            className="camera camera-doc"
             style={{ aspectRatio: String(boxAspect), width: `min(100%, calc(70vh * ${boxAspect}))` }}
           >
             {/* Siempre montado para poder asignar el stream; se oculta si no hay cámara activa. */}
