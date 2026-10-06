@@ -12,6 +12,9 @@ export type CameraState =
   | { status: 'ready' }
   | { status: 'error'; message: string };
 
+/** Marca de sesión: la cámara ya se abrió bien en este navegador (para los que no tienen la API de permisos). */
+const CAMERA_OK_KEY = 'fes-camera-ok';
+
 /** Proporción de un documento tipo tarjeta (ISO/IEC 7810 ID-1: 85,6 × 54 mm), como el DNI. */
 export const CARD_ASPECT = 85.6 / 54;
 
@@ -91,6 +94,11 @@ export function useCamera() {
       }
       video.srcObject = stream;
       await video.play();
+      try {
+        sessionStorage.setItem(CAMERA_OK_KEY, '1');
+      } catch {
+        /* sin almacenamiento: no pasa nada */
+      }
       setMirrored(facingMode === 'user');
       setAspect(video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : null);
       setState({ status: 'ready' });
@@ -98,6 +106,31 @@ export function useCamera() {
       setState({ status: 'error', message: explain(e) });
     }
   }, []);
+
+  /**
+   * Abre la cámara SOLO si el firmante ya la había permitido: no muestra ningún aviso ni pide nada nuevo.
+   * Devuelve `false` si no lo estaba (entonces hay que usar el botón «Activar la cámara»).
+   * Los navegadores sin la API de permisos (Safari) se rigen por una marca guardada tras el primer éxito.
+   */
+  const startIfAllowed = useCallback(
+    async (facingMode: 'user' | 'environment'): Promise<boolean> => {
+      let allowed = false;
+      try {
+        const p = await navigator.permissions.query({ name: 'camera' as PermissionName });
+        allowed = p.state === 'granted';
+      } catch {
+        try {
+          allowed = sessionStorage.getItem(CAMERA_OK_KEY) === '1';
+        } catch {
+          allowed = false;
+        }
+      }
+      if (!allowed) return false;
+      await start(facingMode);
+      return true;
+    },
+    [start],
+  );
 
   /** Congela la imagen sin soltar la cámara: repetir la foto no vuelve a pedir permiso. */
   const hold = useCallback(() => {
@@ -142,7 +175,7 @@ export function useCamera() {
     return { blob, width: canvas.width, height: canvas.height };
   }, []);
 
-  return { videoRef, state, mirrored, aspect, start, stop, hold, resume, capture };
+  return { videoRef, state, mirrored, aspect, start, startIfAllowed, stop, hold, resume, capture };
 }
 
 /** Piso de resolución que el servidor exige (ver PHOTO_POLICY): avisar antes de enviar ahorra un viaje. */

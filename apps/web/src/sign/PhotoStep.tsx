@@ -54,6 +54,7 @@ export function PhotoStep({
   const needsChallenge = !isDocument && view.policy.photoChallengeRequired;
   const expired = needsChallenge && challenge !== null && left === 0;
   const requested = useRef(false);
+  const autoStarted = useRef(false);
 
   const newChallenge = useCallback(async () => {
     setBusy(true);
@@ -82,6 +83,15 @@ export function PhotoStep({
       void newChallenge();
     }
   }, [needsChallenge, challenge, newChallenge]);
+
+  // Si el firmante ya dio permiso, la cámara abre sola al entrar al paso (sin pulsar «Activar la cámara»).
+  // En la selfie se espera a tener el código: una foto sin él no serviría.
+  useEffect(() => {
+    if (autoStarted.current || shot || cam.state.status !== 'idle') return;
+    if (needsChallenge && (!challenge || expired)) return;
+    autoStarted.current = true;
+    void cam.startIfAllowed(isDocument ? 'environment' : 'user');
+  }, [shot, cam, needsChallenge, challenge, expired, isDocument]);
 
   async function take() {
     setError(null);
@@ -200,7 +210,7 @@ export function PhotoStep({
         </button>
       )}
       {!shot && cam.state.status === 'ready' && (
-        <button type="button" className="btn btn-primary btn-block" onClick={take} disabled={expired}>
+        <button type="button" className="btn btn-primary btn-block" onClick={take} disabled={expired || (needsChallenge && !challenge)}>
           Tomar la foto
         </button>
       )}
@@ -220,7 +230,7 @@ export function PhotoStep({
       {expired && <p className="error" role="alert">El código venció: pida otro y vuelva a tomar la foto.</p>}
 
       <button type="button" className="btn btn-block btn-link" onClick={() => { cam.stop(); onBack(); }}>
-        ← Volver al documento
+        {!isDocument && view.policy.idPhotoRequired ? '← Volver a la foto del documento' : '← Volver al documento'}
       </button>
     </section>
   );
