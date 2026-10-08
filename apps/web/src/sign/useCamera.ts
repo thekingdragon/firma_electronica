@@ -180,6 +180,7 @@ export function useCamera() {
 
 /** Piso de resolución que el servidor exige (ver PHOTO_POLICY): avisar antes de enviar ahorra un viaje. */
 export function meetsMinimum(width: number, height: number, kind: 'selfie' | 'id' = 'selfie'): boolean {
-  const [long, short] = kind === 'id' ? [1000, 600] : [1280, 720];
+  // Los mismos pisos que el servidor (apps/api/src/sign/photo.ts): se mide la foto guardada, ya recortada.
+  const [long, short] = kind === 'id' ? [1000, 600] : [640, 540];
   return Math.max(width, height) >= long && Math.min(width, height) >= short;
 }

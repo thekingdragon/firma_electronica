@@ -270,7 +270,7 @@ un SMTP real— más un recorrido manual completo en el navegador montado como e
 
 - **La cámara solo se probó con una cámara sintética** inyectada en el navegador de escritorio. Falta
   probar en celulares reales (sobre todo iOS/Safari y Android de gama baja) y con conexiones lentas:
-  permisos, resolución real y el piso de 1280×720, que puede rechazar equipos antiguos.
+  permisos, resolución real y los pisos de resolución (selfie recortada ≥ 540×640; documento recortado ≥ 600×1000), que pueden rechazar equipos antiguos.
 - **El front no tiene pruebas automáticas**; solo se verificó a mano. La API sí está muy probada.
 - **Revisión legal pendiente.** Las plantillas por defecto son BORRADOR (`legalReviewed: false` y la
   cláusula lo dice). Publicar el texto definitivo: `template:publish`. Nada impide hoy, por código, usar

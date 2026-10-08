@@ -208,7 +208,7 @@ export function PhotoStep({
       {error && <p className="error" role="alert">{error}</p>}
       {tooSmall && shot && (
         <p className="error" role="alert">
-          La foto salió muy pequeña ({shot.width}×{shot.height}). Pruebe con otro dispositivo o navegador: se necesita al menos {isDocument ? '1000×600' : '1280×720'}.
+          La foto salió muy pequeña ({shot.width}×{shot.height}). Pruebe con otro dispositivo o navegador: se necesita al menos {isDocument ? '600 px de lado corto y 1000 de lado largo' : '540 px de lado corto y 640 de lado largo'}.
         </p>
       )}
 
