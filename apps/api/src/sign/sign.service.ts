@@ -6,7 +6,8 @@ import { ApiError } from '../common/api-error';
 import { sha256Hex } from '../common/crypto';
 import { APP_CONFIG, AppConfig } from '../config/config';
 import { PG_POOL } from '../db/db.module';
-import { resolveContent } from '../documents/render';
+import { BlocksError, ViewBlock, resolveBlocks, toViewBlocks } from '../documents/blocks';
+import { formatDate } from '../documents/render-blocks';
 import { MailNotConfiguredError, MailSendError, MailService } from '../mail/mail.service';
 import { OTP_POLICY, generateOtpCode, hashOtp, maskEmail, otpMatches } from './otp';
 import { issueSessionToken, verifySessionToken } from './session-token';
@@ -33,9 +34,8 @@ export interface SigningView {
   issuer: { legalName: string; registryCode: string | null };
   signer: { name: string; documentType: string; documentNumber: string };
   data: Record<string, unknown>;
-  /** Contenido y formulario de la plantilla (en la carta: las facultades y la observación). */
-  content: Record<string, unknown>;
-  annexText: string | null;
+  /** El documento como lista de bloques, con las variables ya completas: la página solo lo dibuja. */
+  blocks: ViewBlock[];
   clause: { version: number; text: string };
   policy: { photoRequired: boolean; photoChallengeRequired: boolean; idPhotoRequired: boolean };
   expiresAt: string;
@@ -288,6 +288,29 @@ export class SignService {
     });
   }
 
+  private viewBlocks(row: LinkRow): ViewBlock[] {
+    try {
+      return toViewBlocks(
+        resolveBlocks(row.body_json, row.annex_text),
+        {
+          brokerLegalName: row.legal_name,
+          brokerRegistryCode: row.registry_code,
+          signerName: row.snapshot.signer.name,
+          signerDocumentType: row.snapshot.signer.documentType,
+          signerDocumentNumber: row.snapshot.signer.documentNumber,
+          reference: row.reference,
+          date: formatDate(new Date()),
+        },
+        row.snapshot.data,
+      );
+    } catch (e) {
+      if (e instanceof BlocksError) {
+        throw new ApiError(503, 'TEMPLATE_INVALID', 'La plantilla de este documento no es válida. Contacte a su corredor.');
+      }
+      throw e;
+    }
+  }
+
   private buildView(row: LinkRow): SigningView {
     return {
       reference: row.reference,
@@ -295,8 +318,7 @@ export class SignService {
       issuer: { legalName: row.legal_name, registryCode: row.registry_code },
       signer: row.snapshot.signer,
       data: row.snapshot.data,
-      content: resolveContent(row.document_type, row.body_json),
-      annexText: row.annex_text,
+      blocks: this.viewBlocks(row),
       clause: { version: row.template_version, text: row.clause_text },
       policy: { photoRequired: row.photo_required, photoChallengeRequired: row.photo_challenge_required, idPhotoRequired: row.id_photo_required },
       expiresAt: row.expires_at.toISOString(),

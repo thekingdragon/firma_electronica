@@ -1,3 +1,5 @@
+import type { Block } from './blocks';
+
 const KEY_STORAGE = 'fes.apiKey';
 const REVIEWER_STORAGE = 'fes.reviewer';
 
@@ -147,6 +149,49 @@ async function call<T>(
   return { data: json as T, status: res.status };
 }
 
+export interface TemplatePolicy {
+  otpRequired: boolean;
+  photoRequired: boolean;
+  photoChallengeRequired: boolean;
+  idPhotoRequired: boolean;
+}
+
+export interface TemplateVersionSummary {
+  version: number;
+  active: boolean;
+  createdAt: string;
+  publishedBy: string | null;
+  legalReviewed: boolean;
+}
+
+export interface TemplateListItem {
+  documentType: string;
+  name: string;
+  activeVersion: number;
+  legalReviewed: boolean;
+  updatedAt: string;
+  publishedBy: string | null;
+}
+
+export interface TemplateDetail extends TemplateVersionSummary {
+  documentType: string;
+  name: string;
+  legacy: boolean;
+  blocks: Block[];
+  clauseText: string;
+  policy: TemplatePolicy;
+  variables: Array<{ name: string; label: string }>;
+  versions: TemplateVersionSummary[];
+}
+
+export interface PublishTemplateBody {
+  blocks: Block[];
+  clauseText: string;
+  policy: TemplatePolicy;
+  legalReviewed: boolean;
+  publishedBy: string;
+}
+
 /** Archivos (PDF, foto): la clave va en una cabecera, así que no se pueden pedir con un enlace normal. */
 async function fetchBlob(path: string, apiKey: string): Promise<Blob> {
   let res: Response;
@@ -158,6 +203,21 @@ async function fetchBlob(path: string, apiKey: string): Promise<Blob> {
   if (!res.ok) {
     const json = await res.json().catch(() => null);
     throw new ApiRequestError(res.status, json?.code ?? 'ERROR', json?.message ?? `Error ${res.status}`);
+  }
+  return res.blob();
+}
+
+/** POST que devuelve un archivo (la vista previa del PDF). Los errores de validación traen su detalle. */
+async function postForBlob(path: string, apiKey: string, body: unknown): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(path, { method: 'POST', headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  } catch {
+    throw new ApiRequestError(0, 'NETWORK', 'No se pudo conectar con el servicio. Revise que la API esté en marcha.');
+  }
+  if (!res.ok) {
+    const json = await res.json().catch(() => null);
+    throw new ApiRequestError(res.status, json?.code ?? 'ERROR', json?.message ?? `Error ${res.status}`, json?.issues ?? []);
   }
   return res.blob();
 }
@@ -176,4 +236,10 @@ export const api = {
   document: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/document`, key),
   photo: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/photo`, key),
   idPhoto: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/id-photo`, key),
+  templates: (key: string) => call<{ items: TemplateListItem[] }>('GET', '/v1/templates', key).then((r) => r.data.items),
+  template: (key: string, type: string, version?: number) =>
+    call<TemplateDetail>('GET', version ? `/v1/templates/${type}/versions/${version}` : `/v1/templates/${type}`, key).then((r) => r.data),
+  publishTemplate: (key: string, type: string, body: PublishTemplateBody) =>
+    call<{ id: string; version: number; previousVersion: number | null }>('POST', `/v1/templates/${type}`, key, body).then((r) => r.data),
+  previewTemplate: (key: string, type: string, body: { blocks: Block[]; clauseText: string }) => postForBlob(`/v1/templates/${type}/preview`, key, body),
 };

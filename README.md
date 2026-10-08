@@ -35,7 +35,8 @@ definitivo (`template:publish`), ninguna firma hecha con este servicio debe dars
 - **PDF firmado** con constancia (foto, hash, IP, hora), **cifrado en disco**; copia al firmante por correo.
 - **Revisión humana** de la identidad en el panel; **revocar**; **vencimiento** automático.
 - **Webhooks** firmados al host (`signature.signed|reviewed|revoked|expired`), con reintentos.
-- Plantillas **versionadas** por tenant, política de evidencia por tipo de documento, retención de fotos.
+- **Plantillas por bloques editables desde el panel** (texto, ramos, facultades, anexos, variables), versionadas y con
+  vista previa en PDF; política de evidencia por tipo de documento; retención de fotos.
 
 ## Documentación
 

@@ -184,6 +184,92 @@ paths:
             application/pdf:
               schema: { type: string, format: binary }
         '409': { description: La solicitud todavía no está firmada }
+  /v1/templates:
+    get:
+      summary: Plantillas de documento de la corredora (la versión activa de cada tipo)
+      security: [{ apiKey: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/TemplateListItem' } }
+  /v1/templates/{documentType}:
+    get:
+      summary: La versión activa de la plantilla, con la lista de versiones
+      security: [{ apiKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/documentType' }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemplateDetail' }
+        '404': { description: TEMPLATE_NOT_FOUND }
+    post:
+      summary: Publicar una versión NUEVA (queda activa)
+      description: |
+        Una versión publicada no se edita nunca: las solicitudes ya creadas conservan la suya. Los bloques se
+        validan completos (variables, códigos repetidos, tamaños) y los problemas se devuelven con su lugar.
+      security: [{ apiKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/documentType' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PublishTemplate' }
+      responses:
+        '201':
+          description: Publicada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  version: { type: integer }
+                  previousVersion: { type: integer, nullable: true }
+        '404': { description: TEMPLATE_NOT_FOUND }
+        '422': { description: VALIDATION_ERROR, con `issues` por bloque }
+  /v1/templates/{documentType}/versions/{version}:
+    get:
+      summary: Una versión concreta de la plantilla (para verla o partir de ella)
+      security: [{ apiKey: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/documentType' }
+        - { in: path, name: version, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemplateDetail' }
+        '404': { description: TEMPLATE_NOT_FOUND }
+  /v1/templates/{documentType}/preview:
+    post:
+      summary: PDF de muestra con lo que se está editando (no guarda nada)
+      security: [{ apiKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/documentType' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [blocks]
+              properties:
+                blocks: { type: array, items: { $ref: '#/components/schemas/Block' } }
+                clauseText: { type: string }
+      responses:
+        '200':
+          description: El PDF de muestra
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        '422': { description: VALIDATION_ERROR }
   /v1/requests/{id}/id-photo:
     get:
       summary: Fotografía del documento de identidad (bytes), para la revisión humana
@@ -364,6 +450,7 @@ components:
     apiKey: { type: apiKey, in: header, name: X-Api-Key }
   parameters:
     id: { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+    documentType: { in: path, name: documentType, required: true, schema: { type: string, example: APPOINTMENT_LETTER } }
   schemas:
     CreateRequest:
       type: object
@@ -457,8 +544,10 @@ components:
         issuer: { type: object, properties: { legalName: { type: string }, registryCode: { type: string, nullable: true } } }
         signer: { type: object, properties: { name: { type: string }, documentType: { type: string }, documentNumber: { type: string } } }
         data: { type: object, description: Datos propios del tipo (en la carta, los seguros nombrados). }
-        content: { type: object, description: "Contenido de la plantilla ya completo: `powers`, `observation` y `texts` (la redacción)." }
-        annexText: { type: string, nullable: true }
+        blocks:
+          type: array
+          items: { $ref: '#/components/schemas/ViewBlock' }
+          description: El documento como lista de bloques, con las variables y las listas de datos ya resueltas.
         clause: { type: object, properties: { version: { type: integer }, text: { type: string } } }
         policy:
           type: object
@@ -467,6 +556,73 @@ components:
             photoChallengeRequired: { type: boolean }
             idPhotoRequired: { type: boolean }
         expiresAt: { type: string, format: date-time }
+    Block:
+      type: object
+      required: [id, type]
+      description: |
+        Un bloque del documento. `type` es uno de: issuerHeader, title, heading, paragraph, list, dataList,
+        powers, signerBox, signatureStamp, annex, pageBreak. Los textos admiten las variables de `variables`
+        (`{{signer.name}}`…); cualquier otra variable se rechaza al publicar. Solo puede haber uno de
+        issuerHeader, powers, signerBox y signatureStamp.
+      properties:
+        id: { type: string }
+        type: { type: string }
+      additionalProperties: true
+    ViewBlock:
+      type: object
+      required: [id, type]
+      description: Un bloque ya resuelto para el firmante (variables completas; `dataList` llega como `list`).
+      properties:
+        id: { type: string }
+        type: { type: string }
+      additionalProperties: true
+    TemplateListItem:
+      type: object
+      properties:
+        documentType: { type: string }
+        name: { type: string }
+        activeVersion: { type: integer }
+        legalReviewed: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+        publishedBy: { type: string, nullable: true }
+    TemplateDetail:
+      type: object
+      properties:
+        documentType: { type: string }
+        name: { type: string }
+        version: { type: integer }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        publishedBy: { type: string, nullable: true }
+        legalReviewed: { type: boolean }
+        legacy: { type: boolean, description: "true si se guardó antes de existir los bloques: los de abajo son los equivalentes." }
+        blocks: { type: array, items: { $ref: '#/components/schemas/Block' } }
+        clauseText: { type: string }
+        policy:
+          type: object
+          properties:
+            otpRequired: { type: boolean }
+            photoRequired: { type: boolean }
+            photoChallengeRequired: { type: boolean }
+            idPhotoRequired: { type: boolean }
+        variables: { type: array, items: { type: object, properties: { name: { type: string }, label: { type: string } } } }
+        versions: { type: array, items: { type: object } }
+    PublishTemplate:
+      type: object
+      required: [blocks, clauseText, policy, publishedBy]
+      properties:
+        blocks: { type: array, items: { $ref: '#/components/schemas/Block' } }
+        clauseText: { type: string }
+        policy:
+          type: object
+          required: [otpRequired, photoRequired, photoChallengeRequired, idPhotoRequired]
+          properties:
+            otpRequired: { type: boolean }
+            photoRequired: { type: boolean }
+            photoChallengeRequired: { type: boolean }
+            idPhotoRequired: { type: boolean }
+        legalReviewed: { type: boolean, default: false }
+        publishedBy: { type: string, description: Quién publica; queda registrado. }
     Verified:
       type: object
       properties:

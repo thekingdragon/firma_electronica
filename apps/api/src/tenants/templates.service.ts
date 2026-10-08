@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { parseBlocks } from '../documents/blocks';
 
 export interface TemplateChanges {
   /** Cláusula de aceptación electrónica que ve y acepta el firmante. */
@@ -11,6 +12,10 @@ export interface TemplateChanges {
   idPhotoRequired?: boolean;
   /** Marca (o desmarca) que el texto pasó la revisión legal. Queda en el contenido de la plantilla. */
   legalReviewed?: boolean;
+  /** Los bloques del documento (se validan al publicar). Reemplazan a los textos sueltos y al anexo anterior. */
+  blocks?: unknown;
+  /** Quién la publica, para dejar constancia. */
+  publishedBy?: string;
 }
 
 export interface PublishedTemplate {
@@ -83,7 +88,18 @@ export async function publishTemplate(
       throw new Error('La foto del documento exige que la foto de verificación sea obligatoria (idPhotoRequired implica photoRequired).');
     }
 
-    const body = { ...base.body_json };
+    // El anexo de una plantilla por bloques es un bloque más: cambiar el campo suelto no haría nada y el
+    // texto viejo seguiría firmándose sin que nadie lo note. Mejor negarse y decir dónde se edita.
+    if (base.body_json.blocks !== undefined && changes.blocks === undefined && changes.annexText !== undefined) {
+      throw new Error('Esta plantilla es por bloques: el anexo es un bloque más. Edítelo desde el panel (Plantillas).');
+    }
+    let body = { ...base.body_json };
+    let annexText = changes.annexText !== undefined ? changes.annexText : base.annex_text;
+    if (changes.blocks !== undefined) {
+      // Con bloques, el anexo y los textos sueltos de la forma anterior ya no cuentan: todo vive en los bloques.
+      body = { legalReviewed: false, blocks: parseBlocks(changes.blocks) };
+      annexText = null;
+    }
     if (changes.legalReviewed !== undefined) body.legalReviewed = changes.legalReviewed;
 
     await client.query('UPDATE document_templates SET active = false WHERE tenant_id = $1 AND document_type = $2 AND active', [
@@ -93,20 +109,21 @@ export async function publishTemplate(
     const ins = await client.query<{ id: string }>(
       `INSERT INTO document_templates
          (tenant_id, document_type, version, body_json, annex_text, clause_text,
-          otp_required, photo_required, photo_challenge_required, id_photo_required, active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
+          otp_required, photo_required, photo_challenge_required, id_photo_required, published_by, active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true)
        RETURNING id`,
       [
         tenantId,
         documentType,
         version,
         JSON.stringify(body),
-        changes.annexText !== undefined ? changes.annexText : base.annex_text,
+        annexText,
         changes.clauseText ?? base.clause_text,
         changes.otpRequired ?? base.otp_required,
         photoRequired,
         photoChallengeRequired,
         idPhotoRequired,
+        changes.publishedBy ?? null,
       ],
     );
     await client.query('COMMIT');

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { powersBlockOf, resolveBlocks } from './blocks';
 
 /**
  * Esquema de lo que el firmante completa (`form`), por tipo de documento, construido desde la
@@ -10,15 +11,20 @@ export interface FormValue {
   observation: string;
 }
 
-interface PowerDef {
-  code: string;
-}
-
 export function formSchemaFor(documentType: string, content: Record<string, unknown>): z.ZodType<FormValue> | null {
   if (documentType !== 'APPOINTMENT_LETTER') return null;
 
-  const codes = (Array.isArray(content.powers) ? (content.powers as PowerDef[]) : []).map((p) => p.code);
-  const maxLen = Number((content.observation as { maxLength?: number } | undefined)?.maxLength ?? 1000);
+  // El formulario sale del bloque de facultades de la plantilla (si no tiene, no hay nada que completar).
+  let block;
+  try {
+    block = powersBlockOf(resolveBlocks(content, null));
+  } catch {
+    return null;
+  }
+  const codes = (block?.items ?? []).map((p) => p.code);
+  const observationOn = block ? block.observation.enabled : false;
+  const maxLen = observationOn ? (block?.observation.maxLength ?? 1000) : 0;
+  const required = block !== null && (codes.length > 0 || observationOn);
 
   return z
     .object({
@@ -30,8 +36,8 @@ export function formSchemaFor(documentType: string, content: Record<string, unkn
       observation: z.string().max(maxLen).default(''),
     })
     .strict()
-    .refine((f) => f.powers.length > 0 || f.observation.trim().length > 0, {
-      message: 'Seleccione al menos una facultad o indique una observación.',
+    .refine((f) => !required || f.powers.length > 0 || f.observation.trim().length > 0, {
+      message: observationOn ? 'Seleccione al menos una facultad o indique una observación.' : 'Seleccione al menos una facultad.',
       path: ['powers'],
     }) as unknown as z.ZodType<FormValue>;
 }

@@ -174,6 +174,31 @@ Deriva del modelo SBS (Anexo I y Anexo A). Puntos que la especificación origina
 - El **Anexo A** (obligaciones del corredor, póliza de RC profesional, razón social y código de
   registro) lo pone el corredor: es `annex_text` de la plantilla, versionado.
 
+### 9.1 Plantillas por bloques (editables desde el panel)
+
+La plantilla de un documento es una **lista ordenada de bloques** que cada corredora arma y edita en el panel
+(Plantillas): encabezado, título, subtítulo, párrafo, lista, lista de datos de la solicitud (los seguros),
+facultades, datos del firmante, constancia de la firma, anexo y salto de página. Se guardan en
+`document_templates.body_json.blocks` (jsonb); no hay tabla nueva.
+
+- **Un solo sitio sabe qué bloques existen:** `apps/api/src/documents/blocks.ts` (tipos, validación,
+  variables, lectura de plantillas anteriores). Lo usan el PDF (`render-blocks.ts`), la página de firma y el
+  panel. El generador de PDF es el mismo para todos los tipos de documento; lo que cambia es la lista.
+- **Todo es texto plano**, nunca HTML. Los textos admiten solo estas variables: `{{broker.legalName}}`,
+  `{{broker.registryCode}}`, `{{signer.name}}`, `{{signer.documentType}}`, `{{signer.documentNumber}}`,
+  `{{reference}}`, `{{date}}`. Cualquier otra se rechaza al publicar, con el bloque donde está.
+- **Versionado inmutable:** publicar crea una versión nueva y la deja activa; una versión usada no se edita,
+  y cada solicitud conserva la versión con la que nació. Queda quién publicó (`published_by`) y si se marcó
+  como revisada.
+- **La constancia de la firma no es un bloque:** va siempre al final del PDF y ninguna plantilla puede quitarla.
+- **En pantalla, la aceptación va siempre al final**, después de los anexos, sin importar dónde esté el bloque
+  de constancia: no se puede aceptar sin haberlos tenido delante.
+- **Plantillas anteriores** (textos sueltos + un anexo) se leen como los bloques equivalentes; no se migraron
+  filas. La primera vez que se publica desde el panel se guardan por bloques. El comando `template:publish`
+  se niega a cambiar el anexo suelto de una plantilla por bloques (diría que cambió y no cambiaría nada).
+- **Quién escribe el texto responde por él:** el servicio valida la forma, no el contenido legal. El panel
+  registra quién publicó y deja marcar «revisada por el área legal»; no bloquea la firma si no se marcó.
+
 ## 10. Integración con `gestor_segurov3` (pendiente: necesita su aprobación)
 
 **No está hecha, y no se hizo a propósito:** toca el proyecto de producción y cambia la semántica de un

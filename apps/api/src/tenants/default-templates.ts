@@ -2,7 +2,7 @@
  * Plantillas de partida que se le crean a un tenant nuevo. Son un punto de partida editable: el
  * tenant puede crear una versión nueva; una versión usada no se edita (ver document_templates).
  */
-import { DEFAULT_LETTER_TEXTS } from '../documents/appointment-letter';
+import { blocksFromLegacy } from '../documents/blocks';
 
 export interface TemplateSeed {
   documentType: string;
@@ -57,12 +57,16 @@ export function defaultTemplates(): TemplateSeed[] {
       bodyJson: {
         // Mientras sea false, las plantillas no han pasado la revisión legal (ver ARQUITECTURA §8).
         legalReviewed: false,
-        powers: FACULTADES_CARTA.map(([code, text]) => ({ code, text, defaultChecked: true })),
-        observation: { maxLength: 1000 },
-        // Redacción del documento: editable por tenant (otro país, otro modelo).
-        texts: DEFAULT_LETTER_TEXTS,
+        // La carta es una lista de bloques que la corredora edita desde el panel (otro país, otro modelo).
+        blocks: blocksFromLegacy(
+          {
+            powers: FACULTADES_CARTA.map(([code, text]) => ({ code, text, defaultChecked: true })),
+            observation: { maxLength: 1000 },
+          },
+          ANEXO_A_CARTA,
+        ),
       },
-      annexText: ANEXO_A_CARTA,
+      annexText: null,
       // BORRADOR: texto sujeto a revisión legal antes de usarse con clientes reales.
       clauseText:
         'Autorizo electrónicamente el nombramiento del corredor de seguros indicado, ' +

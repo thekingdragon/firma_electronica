@@ -124,11 +124,35 @@ describe('publicar una versión de la plantilla', () => {
     expect(ev.clause_text).toBe('CLÁUSULA DEL PDF');
   });
 
-  it('se puede cambiar el anexo y quitarlo con null', async () => {
-    await publishTemplate(pool, tenantId, 'APPOINTMENT_LETTER', { annexText: 'Anexo nuevo' });
-    expect((await active())[0].annex_text).toBe('Anexo nuevo');
-    await publishTemplate(pool, tenantId, 'APPOINTMENT_LETTER', { annexText: null });
-    expect((await active())[0].annex_text).toBeNull();
+  it('en una plantilla por bloques, cambiar el anexo suelto se rechaza: el anexo es un bloque y se edita en el panel', async () => {
+    const antes = (await active())[0];
+    expect(antes.body_json.blocks).toBeDefined();
+    await expect(publishTemplate(pool, tenantId, 'APPOINTMENT_LETTER', { annexText: 'Anexo nuevo' })).rejects.toThrow(/por bloques/);
+    expect((await active())[0].version).toBe(antes.version); // no se publicó nada
+  });
+
+  it('en una plantilla guardada ANTES de los bloques, el anexo suelto se puede cambiar y quitar con null', async () => {
+    const t = await createTenant(pool, { name: 'Legado', country: 'PE', legalName: 'Legado SAC' });
+    await pool.query(
+      `UPDATE document_templates SET body_json = $2, annex_text = 'Anexo viejo' WHERE tenant_id = $1`,
+      [t.tenant.id, JSON.stringify({ legalReviewed: false, powers: [], observation: { maxLength: 100 } })],
+    );
+    await publishTemplate(pool, t.tenant.id, 'APPOINTMENT_LETTER', { annexText: 'Anexo nuevo' });
+    expect((await active(t.tenant.id))[0].annex_text).toBe('Anexo nuevo');
+    await publishTemplate(pool, t.tenant.id, 'APPOINTMENT_LETTER', { annexText: null });
+    expect((await active(t.tenant.id))[0].annex_text).toBeNull();
+  });
+
+  it('publicar bloques nuevos reemplaza al anexo suelto y a los textos anteriores', async () => {
+    const t = await createTenant(pool, { name: 'Legado2', country: 'PE', legalName: 'Legado2 SAC' });
+    await pool.query(`UPDATE document_templates SET body_json = $2, annex_text = 'Anexo viejo' WHERE tenant_id = $1`, [
+      t.tenant.id,
+      JSON.stringify({ legalReviewed: true, powers: [], texts: { title: 'VIEJO' } }),
+    ]);
+    await publishTemplate(pool, t.tenant.id, 'APPOINTMENT_LETTER', { blocks: [{ id: 'a', type: 'title', text: 'NUEVO' }] });
+    const row = (await active(t.tenant.id))[0];
+    expect(row.annex_text).toBeNull();
+    expect(row.body_json).toEqual({ legalReviewed: false, blocks: [expect.objectContaining({ type: 'title', text: 'NUEVO' })] });
   });
 
   it('rechaza una cláusula vacía o gigante, y un desafío sin foto, sin dejar nada a medias', async () => {

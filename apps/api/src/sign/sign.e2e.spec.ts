@@ -309,11 +309,20 @@ describe('flujo público de firma', () => {
       const v = res.body.view;
       expect(v.signer).toEqual({ name: 'Ana Pérez Quispe', documentType: 'DNI', documentNumber: '12345678' });
       expect(v.data.insurances).toEqual(['SCTR Salud', 'SCTR Pensión']);
-      expect(v.content.powers).toHaveLength(6);
-      // El servidor entrega la redacción ya completa: la página no duplica los textos de la carta.
-      expect(v.content.texts.title).toBe('CARTA DE NOMBRAMIENTO');
-      expect(v.content.texts.powersIntro).toContain('facultados');
-      expect(v.annexText).toContain('Obligaciones del corredor de seguros');
+      // El servidor entrega el documento como bloques ya completos (variables resueltas, listas de datos
+      // resueltas): la página solo los dibuja y no duplica ningún texto de la carta.
+      const bloques = v.blocks as Array<{ type: string; [k: string]: unknown }>;
+      expect(v.content).toBeUndefined();
+      expect(v.annexText).toBeUndefined();
+      expect(bloques.find((b) => b.type === 'title')?.text).toBe('CARTA DE NOMBRAMIENTO');
+      const facultades = bloques.find((b) => b.type === 'powers') as unknown as { items: unknown[]; intro: string };
+      expect(facultades.items).toHaveLength(6);
+      expect(facultades.intro).toContain('facultados');
+      expect(bloques.find((b) => b.type === 'destinatario' || (b.type === 'paragraph' && String(b.text).includes('Señores')))?.text).toContain('Con correo Corredores SAC');
+      const seguros = bloques.find((b) => b.type === 'list' && b.style === 'letters') as unknown as { items: string[] };
+      expect(seguros.items).toEqual(['SCTR Salud', 'SCTR Pensión']);
+      const anexo = bloques.find((b) => b.type === 'annex') as unknown as { text: string };
+      expect(anexo.text).toContain('Obligaciones del corredor de seguros');
       expect(v.clause.text).toContain('BORRADOR');
       expect(v.clause.version).toBe(1);
       expect(v.policy).toEqual({ photoRequired: true, photoChallengeRequired: true, idPhotoRequired: true });

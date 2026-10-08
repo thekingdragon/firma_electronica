@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { PowerDef, SigningView } from './signApi';
+import { powersOf, type SigningView, type ViewBlock } from './signApi';
 
 export interface SignForm {
   powers: string[];
@@ -10,17 +10,19 @@ export interface SignForm {
 /** Valores iniciales: las facultades marcadas por defecto en la plantilla. */
 export function initialForm(view: SigningView): SignForm {
   return {
-    powers: (view.content.powers ?? []).filter((p) => p.defaultChecked).map((p) => p.code),
+    powers: (powersOf(view)?.items ?? []).filter((p) => p.defaultChecked).map((p) => p.code),
     observation: '',
     accepted: false,
   };
 }
 
 /** Qué falta, por campo. El botón siempre se puede pulsar: al pulsar se marca lo que falta. */
-function missing(f: SignForm): { powers?: string; accepted?: string } {
+function missing(view: SigningView, f: SignForm): { powers?: string; accepted?: string } {
   const out: { powers?: string; accepted?: string } = {};
-  if (f.powers.length === 0 && f.observation.trim() === '') {
-    out.powers = 'Marque al menos una facultad o escriba una observación.';
+  const block = powersOf(view);
+  const asks = block !== null && (block.items.length > 0 || block.observation.enabled);
+  if (block && asks && f.powers.length === 0 && f.observation.trim() === '') {
+    out.powers = block.observation.enabled ? 'Marque al menos una facultad o escriba una observación.' : 'Marque al menos una facultad.';
   }
   if (!f.accepted) out.accepted = 'Debe aceptar para poder firmar.';
   return out;
@@ -40,9 +42,6 @@ export function DocumentStep({
   continueLabel: string;
 }) {
   const [shown, setShown] = useState<{ powers?: string; accepted?: string }>({});
-  const t = view.content.texts ?? {};
-  const powers: PowerDef[] = view.content.powers ?? [];
-  const maxLen = view.content.observation?.maxLength ?? 1000;
 
   function toggle(code: string) {
     const next = form.powers.includes(code) ? form.powers.filter((c) => c !== code) : [...form.powers, code];
@@ -51,71 +50,114 @@ export function DocumentStep({
   }
 
   function next() {
-    const m = missing(form);
+    const m = missing(view, form);
     setShown(m);
     if (Object.keys(m).length === 0) onContinue();
   }
 
+  function draw(b: ViewBlock) {
+    switch (b.type) {
+      case 'issuerHeader':
+        return (
+          <div key={b.id} className="letter-head">
+            <p className="muted small">
+              {b.legalName}
+              {b.registryCode ? ` · Código de registro ${b.registryCode}` : ''} · Ref. {view.reference}
+            </p>
+            {b.date && <p className="muted small letter-date">{b.date}</p>}
+          </div>
+        );
+      case 'title':
+        return <h2 key={b.id} className="letter-title">{b.text}</h2>;
+      case 'heading':
+        return <h3 key={b.id} className="letter-heading">{b.text}</h3>;
+      case 'paragraph':
+        return (
+          <p key={b.id} className={`block-par${b.small ? ' muted small' : ''}`} style={{ textAlign: b.align, fontWeight: b.bold ? 700 : undefined }}>
+            {b.text}
+          </p>
+        );
+      case 'list':
+        if (b.style === 'letters') {
+          return (
+            <ol key={b.id} className="insurances" type="A">
+              {b.items.map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ol>
+          );
+        }
+        return (
+          <ul key={b.id} className={b.style === 'check' ? 'check-list' : 'bullet-list'}>
+            {b.items.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+        );
+      case 'powers': {
+        const maxLen = b.observation.maxLength;
+        return (
+          <div key={b.id}>
+            {b.intro && <p className="block-par">{b.intro}</p>}
+            {b.items.length > 0 && (
+              <fieldset className={`powers${shown.powers ? ' invalid' : ''}`}>
+                <legend className="sr-only">Facultades</legend>
+                {b.items.map((p) => (
+                  <label key={p.code} className="check">
+                    <input type="checkbox" checked={form.powers.includes(p.code)} onChange={() => toggle(p.code)} />
+                    <span>{p.text}</span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
+            {shown.powers && <p className="error" role="alert">{shown.powers}</p>}
+            {b.observation.enabled && (
+              <>
+                <label htmlFor="obs">{b.observation.label}</label>
+                <textarea
+                  id="obs"
+                  rows={3}
+                  maxLength={maxLen}
+                  value={form.observation}
+                  onChange={(e) => {
+                    onChange({ ...form, observation: e.target.value });
+                    setShown((s) => ({ ...s, powers: undefined }));
+                  }}
+                />
+                <p className="hint">{form.observation.length}/{maxLen}</p>
+              </>
+            )}
+          </div>
+        );
+      }
+      case 'signerBox':
+        return (
+          <div key={b.id} className="signer-box">
+            <strong>{b.title}</strong>
+            <div>Nombre: {b.name}</div>
+            <div>Documento: {b.document}</div>
+          </div>
+        );
+      case 'signatureStamp':
+        // En el PDF marca dónde va la constancia de la firma; en pantalla la aceptación va SIEMPRE al final,
+        // después de todos los anexos, para que no se pueda aceptar sin haberlos tenido delante.
+        return null;
+      case 'annex':
+        return (
+          <details key={b.id} className="annex">
+            <summary>{b.title} (léalo antes de firmar)</summary>
+            {b.subtitle && <p className="muted small">{b.subtitle}</p>}
+            <div className="annex-text">{b.text}</div>
+          </details>
+        );
+      case 'pageBreak':
+        return <hr key={b.id} className="block-break" />;
+    }
+  }
+
   return (
     <section className="card letter">
-      <h2 className="letter-title">{t.title ?? 'Documento'}</h2>
-      <p className="muted small">
-        {view.issuer.legalName}
-        {view.issuer.registryCode ? ` · Código de registro ${view.issuer.registryCode}` : ''} · Ref. {view.reference}
-      </p>
-
-      <p>
-        {t.salutation}<br />
-        <strong>{t.addressee}</strong><br />
-        <strong>{view.issuer.legalName}</strong><br />
-        {t.presente}
-      </p>
-      <p>{t.greeting}</p>
-      <p>{t.body}</p>
-
-      <ol className="insurances" type="A">
-        {(view.data.insurances ?? []).map((s) => (
-          <li key={s}>{s}</li>
-        ))}
-      </ol>
-
-      <p>{t.powersIntro}</p>
-      <fieldset className={`powers${shown.powers ? ' invalid' : ''}`}>
-        <legend className="sr-only">Facultades</legend>
-        {powers.map((p) => (
-          <label key={p.code} className="check">
-            <input type="checkbox" checked={form.powers.includes(p.code)} onChange={() => toggle(p.code)} />
-            <span>{p.text}</span>
-          </label>
-        ))}
-      </fieldset>
-      {shown.powers && <p className="error" role="alert">{shown.powers}</p>}
-
-      <label htmlFor="obs">{t.observationLabel}</label>
-      <textarea
-        id="obs"
-        rows={3}
-        maxLength={maxLen}
-        value={form.observation}
-        onChange={(e) => {
-          onChange({ ...form, observation: e.target.value });
-          setShown((s) => ({ ...s, powers: undefined }));
-        }}
-      />
-      <p className="hint">{form.observation.length}/{maxLen}</p>
-
-      <div className="signer-box">
-        <strong>{t.signerBlock}</strong>
-        <div>Nombre: {view.signer.name}</div>
-        <div>Documento: {view.signer.documentType} {view.signer.documentNumber}</div>
-      </div>
-
-      {view.annexText && (
-        <details className="annex">
-          <summary>Anexo: obligaciones del corredor de seguros (léalo antes de firmar)</summary>
-          <div className="annex-text">{view.annexText}</div>
-        </details>
-      )}
+      {view.blocks.map(draw)}
 
       <div className={`accept${shown.accepted ? ' invalid' : ''}`}>
         <label className="check">

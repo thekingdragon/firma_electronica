@@ -1,4 +1,4 @@
-import type { SigningView } from './signApi';
+import { powersOf, type SigningView } from './signApi';
 import type { SignForm } from './DocumentStep';
 import type { TakenPhoto } from './PhotoStep';
 
@@ -21,7 +21,7 @@ export function ReviewStep({
   onBack: () => void;
   onSign: () => void;
 }) {
-  const powers = (view.content.powers ?? []).filter((p) => form.powers.includes(p.code));
+  const powers = (powersOf(view)?.items ?? []).filter((p) => form.powers.includes(p.code));
   return (
     <section className="card">
       <h2>Revise y firme</h2>

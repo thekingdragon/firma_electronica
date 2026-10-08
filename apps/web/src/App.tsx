@@ -4,6 +4,8 @@ import { Layout } from './components/Layout';
 import { Connect } from './pages/Connect';
 import { NewRequest } from './pages/NewRequest';
 import { RequestDetail } from './pages/RequestDetail';
+import { TemplateEditor } from './pages/TemplateEditor';
+import { Templates } from './pages/Templates';
 import { Requests } from './pages/Requests';
 import { SignPage } from './sign/SignPage';
 
@@ -22,6 +24,8 @@ function Panel() {
           <Route path="/solicitudes" element={<Requests />} />
           <Route path="/solicitudes/nueva" element={<NewRequest />} />
           <Route path="/solicitudes/:id" element={<RequestDetail />} />
+          <Route path="/plantillas" element={<Templates />} />
+          <Route path="/plantillas/:type" element={<TemplateEditor />} />
         </Route>
         <Route path="*" element={<Navigate to="/solicitudes" replace />} />
       </Routes>

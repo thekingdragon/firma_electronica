@@ -26,14 +26,33 @@ export interface PowerDef {
   defaultChecked?: boolean;
 }
 
+/** Un bloque del documento ya resuelto por el servidor (variables completas; las listas de datos llegan como `list`). */
+export type ViewBlock =
+  | { id: string; type: 'issuerHeader'; legalName: string; registryCode: string | null; date: string | null }
+  | { id: string; type: 'title'; text: string }
+  | { id: string; type: 'heading'; text: string }
+  | { id: string; type: 'paragraph'; text: string; align: 'left' | 'center' | 'right'; bold: boolean; small: boolean }
+  | { id: string; type: 'list'; items: string[]; style: 'check' | 'bullet' | 'letters' }
+  | { id: string; type: 'powers'; intro: string; items: PowerDef[]; observation: { enabled: boolean; label: string; maxLength: number } }
+  | { id: string; type: 'signerBox'; title: string; name: string; document: string }
+  | { id: string; type: 'signatureStamp' }
+  | { id: string; type: 'annex'; title: string; subtitle: string; text: string }
+  | { id: string; type: 'pageBreak' };
+
+export type PowersViewBlock = Extract<ViewBlock, { type: 'powers' }>;
+
+/** El bloque de facultades del documento (como mucho uno). */
+export function powersOf(view: SigningView): PowersViewBlock | null {
+  return (view.blocks.find((b) => b.type === 'powers') as PowersViewBlock | undefined) ?? null;
+}
+
 export interface SigningView {
   reference: string;
   documentType: string;
   issuer: { legalName: string; registryCode: string | null };
   signer: { name: string; documentType: string; documentNumber: string };
   data: { insurances?: string[] } & Record<string, unknown>;
-  content: { powers?: PowerDef[]; observation?: { maxLength?: number }; texts?: Record<string, string> };
-  annexText: string | null;
+  blocks: ViewBlock[];
   clause: { version: number; text: string };
   policy: { photoRequired: boolean; photoChallengeRequired: boolean; idPhotoRequired: boolean };
   expiresAt: string;

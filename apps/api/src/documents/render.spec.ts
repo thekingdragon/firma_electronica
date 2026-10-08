@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
 import { defaultTemplates } from '../tenants/default-templates';
+import type { Block } from './blocks';
 import { makePng } from './image-fixtures';
 import { imageInfo } from './image-info';
 import { UnsupportedDocumentTypeError, renderDocument, resolveContent } from './render';
@@ -68,9 +69,21 @@ describe('renderDocument (APPOINTMENT_LETTER)', () => {
     expect(await pagesOf(bytes)).toBeGreaterThanOrEqual(1);
   });
 
-  it('sin anexo genera menos páginas', async () => {
+  it('sin el bloque de anexo genera menos páginas', async () => {
+    const blocks = tpl.bodyJson.blocks as Block[];
     const con = await pagesOf(await renderDocument('APPOINTMENT_LETTER', input()));
-    const sin = await pagesOf(await renderDocument('APPOINTMENT_LETTER', input({ annexText: null })));
+    const sin = await pagesOf(
+      await renderDocument('APPOINTMENT_LETTER', input({ content: { ...tpl.bodyJson, blocks: blocks.filter((b) => b.type !== 'annex') } })),
+    );
+    expect(sin).toBeLessThan(con);
+  });
+
+  it('una plantilla guardada ANTES de los bloques (textos sueltos + anexo aparte) sigue generándose igual', async () => {
+    const legacy = { powers: [{ code: 'RENOVACIONES', text: 'Renovar', defaultChecked: true }], observation: { maxLength: 100 } };
+    // Sin foto en la constancia: así la constancia no es lo que decide cuántas páginas salen.
+    const ev = { ip: null, otpVerifiedAt: null, challengeCode: null, photo: null };
+    const con = await pagesOf(await renderDocument('APPOINTMENT_LETTER', input({ content: legacy, annexText: Array.from({ length: 40 }, (_, i) => `a${i}. Obligación número ${i} del corredor, con un texto lo bastante largo para ocupar su línea`).join('\n\n'), evidence: ev })));
+    const sin = await pagesOf(await renderDocument('APPOINTMENT_LETTER', input({ content: legacy, annexText: null, evidence: ev })));
     expect(sin).toBeLessThan(con);
   });
 
@@ -90,9 +103,15 @@ describe('renderDocument (APPOINTMENT_LETTER)', () => {
   });
 
   it('una plantilla con textos propios los usa en lugar de los de partida', async () => {
+    const blocks = (tpl.bodyJson.blocks as Block[]).map((b) => (b.type === 'title' ? { ...b, text: 'APPOINTMENT LETTER' } : b));
+    const propio = await renderDocument('APPOINTMENT_LETTER', input({ content: { ...tpl.bodyJson, blocks } }));
+    expect((await PDFDocument.load(propio)).getTitle()).toBe('APPOINTMENT LETTER FE-2026-ABCD1234');
+  });
+
+  it('también en la forma anterior a los bloques (content.texts)', async () => {
     const propio = await renderDocument(
       'APPOINTMENT_LETTER',
-      input({ content: { ...tpl.bodyJson, texts: { title: 'APPOINTMENT LETTER' } } }),
+      input({ content: { powers: [], texts: { title: 'APPOINTMENT LETTER' } }, annexText: null }),
     );
     expect((await PDFDocument.load(propio)).getTitle()).toBe('APPOINTMENT LETTER FE-2026-ABCD1234');
   });
