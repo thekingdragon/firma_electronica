@@ -76,7 +76,7 @@ const ASEGURADORAS =
   'siniestralidad, límites, tasas, condiciones, aplicaciones anteriores y cualquier otra información que puedan ' +
   'necesitar para cumplir los deberes y obligaciones propios de su naturaleza en el corretaje y la asesoría en seguros.';
 const ANEXO_REF =
-  'Se adjunta, en calidad de Anexo, las obligaciones del corredor de seguros de conformidad con la Resolución SBS ' +
+  'Se adjuntan, en calidad de Anexo, las obligaciones del corredor de seguros, de conformidad con la Resolución SBS ' +
   'N.º 809-2019.';
 const CONSENTIMIENTO_BENCHMARKING =
   'Autorizo a ustedes a incluir, de manera no identificable, información relativa a mi programa de seguros para ' +
@@ -102,14 +102,16 @@ function carta(): Block[] {
     if (b.type === 'issuerHeader') continue;
     // «Señores: / CORREDORES DE SEGUROS / <razón social> / Presente.-» repetía el giro: la razón social ya lo incluye.
     if (b.id === 'destinatario' && b.type === 'paragraph') b = { ...b, text: 'Señores:\n{{broker.legalName}}\nPresente.-' };
+    // «Estimados señores:» repetía «Señores:» a una línea de distancia. El saludo habitual de una carta formal es otro.
+    if (b.id === 'saludo' && b.type === 'paragraph') b = { ...b, text: 'De mi consideración:' };
     if (b.id === 'cierre') {
       // Los consentimientos van antes del cierre («Atentamente»), cada uno con su casilla.
       out.push({ id: 'datos', type: 'consent', code: 'DATOS_PERSONALES', text: CONSENTIMIENTO_DATOS, required: true });
       out.push({ id: 'benchmarking', type: 'consent', code: 'BENCHMARKING', text: CONSENTIMIENTO_BENCHMARKING, required: false });
     }
     out.push(b);
-    if (b.id === 'seguros') out.push(par('vigencia', VIGENCIA));
     if (b.id === 'facultades') {
+      out.push(par('vigencia', VIGENCIA));
       out.push(par('aseguradoras', ASEGURADORAS));
       out.push(par('anexo-ref', ANEXO_REF));
     }
