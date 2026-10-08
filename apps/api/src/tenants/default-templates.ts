@@ -55,28 +55,33 @@ El contratante, asegurado y/o beneficiario puede solicitar la cobertura de esta 
 // Texto de partida del consentimiento de datos personales (Ley N.º 29733). Cada corredora lo ajusta en el panel
 // con su domicilio y su correo de contacto; el texto definitivo es materia de la revisión legal.
 const CONSENTIMIENTO_DATOS =
-  'Autorizo que mis datos personales sean tratados y almacenados en medios digitales por {{broker.legalName}}, con la ' +
-  'finalidad de brindarme asesoría en seguros, gestionar cotizaciones, emitir pólizas, atender siniestros y mantener ' +
-  'comunicación relacionada con sus servicios, conforme a la Ley N.º 29733, Ley de Protección de Datos Personales, y su ' +
-  'reglamento. Sé que puedo ejercer mis derechos de acceso, rectificación, cancelación y oposición, y pedir copia de mi ' +
-  'información, enviando una solicitud a {{broker.legalName}}. [BORRADOR: texto sujeto a revisión legal]';
+  'En cumplimiento de la Ley N.º 29733, Ley de Protección de Datos Personales, y su reglamento, autorizo, de manera ' +
+  'libre, previa, expresa e informada, que {{broker.legalName}} trate y almacene mis datos personales en medios ' +
+  'digitales, con la finalidad de brindarme asesoría en seguros, gestionar cotizaciones, emitir pólizas, atender ' +
+  'siniestros y mantener comunicación relacionada con sus servicios. Declaro haber sido informado de que puedo ejercer ' +
+  'mis derechos de acceso, rectificación, cancelación y oposición, así como solicitar copia de la información que se ' +
+  'mantiene sobre mí, en cualquier momento y de forma gratuita, mediante comunicación dirigida a {{broker.legalName}}. ' +
+  '[BORRADOR: texto sujeto a revisión legal]';
 
-// Textos tomados de modelos de cartas reales (se descartó todo lo de responsabilidad civil y reclamos). Todo es
-// editable por la corredora desde el panel; el texto definitivo es materia de la revisión legal.
+// Textos basados en cartas de nombramiento reales (se descartó todo lo de responsabilidad civil y reclamos). Se
+// redactan en segunda persona («ustedes»), como el resto de la carta, que va dirigida a la corredora. Todo es
+// editable desde el panel; el texto definitivo es materia de la revisión legal.
 const REFERENCIA = 'Referencia: Carta de Nombramiento de Corredor de Seguros';
 const VIGENCIA =
-  'Este nombramiento reemplaza todos los demás que haya otorgado anteriormente. Asimismo, abarca todos los asuntos ' +
+  'Este nombramiento reemplaza todos los demás que se hayan otorgado anteriormente. Asimismo, abarca todos los asuntos ' +
   'relativos a la negociación, colocación y administración de mis pólizas de seguros, conforme al marco regulatorio, y ' +
-  'permanecerá vigente hasta que {{broker.legalName}} reciba una notificación escrita en contrario.';
+  'permanecerá vigente hasta que ustedes reciban una notificación escrita en contrario.';
 const ASEGURADORAS =
-  'Las aseguradoras a las cuales {{broker.legalName}} presente esta comunicación deberán brindarle toda la asistencia ' +
-  'que pueda solicitar en mi nombre, suministrándole la información que requiera, incluyendo pólizas, siniestralidad, ' +
-  'límites, tasas, condiciones, aplicaciones anteriores y cualquier otra información que necesite para cumplir los ' +
-  'deberes y obligaciones propios del corretaje y la asesoría en seguros.';
-const ANEXO_REF = 'Se adjunta, en calidad de Anexo, las obligaciones del corredor de seguros de conformidad con la Resolución SBS N.º 809-2019.';
+  'Las aseguradoras a las cuales ustedes presenten esta comunicación deberán brindarles toda la asistencia que puedan ' +
+  'solicitar en mi nombre, suministrándoles toda la información que requieran, incluyendo, pero no limitada a, pólizas, ' +
+  'siniestralidad, límites, tasas, condiciones, aplicaciones anteriores y cualquier otra información que puedan ' +
+  'necesitar para cumplir los deberes y obligaciones propios de su naturaleza en el corretaje y la asesoría en seguros.';
+const ANEXO_REF =
+  'Se adjunta, en calidad de Anexo, las obligaciones del corredor de seguros de conformidad con la Resolución SBS ' +
+  'N.º 809-2019.';
 const CONSENTIMIENTO_BENCHMARKING =
-  'Autorizo que {{broker.legalName}} incluya, de manera no identificable, información relativa a mi programa de seguros ' +
-  'para realizar análisis comparativos (benchmarking), modelado y ofertas de análisis de datos y de seguros.';
+  'Autorizo a ustedes a incluir, de manera no identificable, información relativa a mi programa de seguros para ' +
+  'realizar análisis comparativos (benchmarking), modelado y ofertas de análisis de datos y de seguros.';
 
 const par = (id: string, text: string): Block => ({ id, type: 'paragraph', text, align: 'left', bold: false, small: false });
 
@@ -120,9 +125,9 @@ export function defaultTemplates(): TemplateSeed[] {
       annexText: null,
       // BORRADOR: texto sujeto a revisión legal antes de usarse con clientes reales.
       clauseText:
-        'Autorizo electrónicamente el nombramiento del corredor de seguros indicado, ' +
-        'en los términos de esta carta, mediante la verificación de mi identidad en la fecha y ' +
-        'hora que registra el sistema. [BORRADOR: texto sujeto a revisión legal]',
+        'Declaro haber leído la presente carta y sus anexos, y manifiesto mi conformidad con su contenido. Acepto ' +
+        'suscribirla de manera electrónica, reconociendo que esta firma, junto con la fecha y hora que registra el ' +
+        'sistema, tiene los mismos efectos que mi firma manuscrita. [BORRADOR: texto sujeto a revisión legal]',
       otpRequired: true,
       photoRequired: true,
       photoChallengeRequired: true,
