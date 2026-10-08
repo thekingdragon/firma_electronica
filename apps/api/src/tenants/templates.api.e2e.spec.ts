@@ -101,7 +101,7 @@ describe('API de plantillas', () => {
       expect(r.status).toBe(200);
       expect(r.body).toMatchObject({ version: 1, active: true, legacy: false });
       expect(r.body.blocks.map((b: { type: string }) => b.type)).toEqual(
-        expect.arrayContaining(['issuerHeader', 'title', 'powers', 'signerBox', 'signatureStamp', 'annex']),
+        expect.arrayContaining(['title', 'powers', 'consent', 'signerBox', 'signatureStamp', 'annex']),
       );
       expect(r.body.policy).toEqual({ otpRequired: true, photoRequired: true, photoChallengeRequired: true, idPhotoRequired: true, idPhotoBackRequired: true });
       expect(r.body.variables.map((v: { name: string }) => v.name)).toContain('signer.name');

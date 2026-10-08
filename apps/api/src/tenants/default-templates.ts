@@ -66,7 +66,6 @@ const CONSENTIMIENTO_DATOS =
 // Textos basados en cartas de nombramiento reales (se descartó todo lo de responsabilidad civil y reclamos). Se
 // redactan en segunda persona («ustedes»), como el resto de la carta, que va dirigida a la corredora. Todo es
 // editable desde el panel; el texto definitivo es materia de la revisión legal.
-const REFERENCIA = 'Referencia: Carta de Nombramiento de Corredor de Seguros';
 const VIGENCIA =
   'Este nombramiento reemplaza todos los demás que se hayan otorgado anteriormente. Asimismo, abarca todos los asuntos ' +
   'relativos a la negociación, colocación y administración de mis pólizas de seguros, conforme al marco regulatorio, y ' +
@@ -94,15 +93,21 @@ function carta(): Block[] {
     ANEXO_A_CARTA,
   );
   // Se arma en el orden de la carta: lo propio de cada bloque va justo después del que le corresponde.
-  const out: Block[] = [];
-  for (const b of base) {
+  // La carta la escribe el cliente (primera persona): abre con SUS datos y la fecha, no con un membrete de la corredora.
+  const out: Block[] = [
+    par('cliente', 'Nombres y apellidos: {{signer.name}}\n{{signer.documentType}}: {{signer.documentNumber}}'),
+    par('fecha', '{{date}}'),
+  ];
+  for (let b of base) {
+    if (b.type === 'issuerHeader') continue;
+    // «Señores: / CORREDORES DE SEGUROS / <razón social> / Presente.-» repetía el giro: la razón social ya lo incluye.
+    if (b.id === 'destinatario' && b.type === 'paragraph') b = { ...b, text: 'Señores:\n{{broker.legalName}}\nPresente.-' };
     if (b.id === 'cierre') {
       // Los consentimientos van antes del cierre («Atentamente»), cada uno con su casilla.
       out.push({ id: 'datos', type: 'consent', code: 'DATOS_PERSONALES', text: CONSENTIMIENTO_DATOS, required: true });
       out.push({ id: 'benchmarking', type: 'consent', code: 'BENCHMARKING', text: CONSENTIMIENTO_BENCHMARKING, required: false });
     }
     out.push(b);
-    if (b.id === 'destinatario') out.push(par('referencia', REFERENCIA));
     if (b.id === 'seguros') out.push(par('vigencia', VIGENCIA));
     if (b.id === 'facultades') {
       out.push(par('aseguradoras', ASEGURADORAS));
