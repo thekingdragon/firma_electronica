@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { powersBlockOf, resolveBlocks } from './blocks';
+import { consentsOf, powersBlockOf, resolveBlocks } from './blocks';
 
 /**
  * Esquema de lo que el firmante completa (`form`), por tipo de documento, construido desde la
@@ -9,6 +9,8 @@ import { powersBlockOf, resolveBlocks } from './blocks';
 export interface FormValue {
   powers: string[];
   observation: string;
+  /** Códigos de los consentimientos que el firmante marcó. */
+  consents: string[];
 }
 
 export function formSchemaFor(documentType: string, content: Record<string, unknown>): z.ZodType<FormValue> | null {
@@ -16,11 +18,16 @@ export function formSchemaFor(documentType: string, content: Record<string, unkn
 
   // El formulario sale del bloque de facultades de la plantilla (si no tiene, no hay nada que completar).
   let block;
+  let consents;
   try {
-    block = powersBlockOf(resolveBlocks(content, null));
+    const blocks = resolveBlocks(content, null);
+    block = powersBlockOf(blocks);
+    consents = consentsOf(blocks);
   } catch {
     return null;
   }
+  const consentCodes = consents.map((c) => c.code);
+  const consentRequired = consents.filter((c) => c.required).map((c) => c.code);
   const codes = (block?.items ?? []).map((p) => p.code);
   const observationOn = block ? block.observation.enabled : false;
   const maxLen = observationOn ? (block?.observation.maxLength ?? 1000) : 0;
@@ -34,8 +41,18 @@ export function formSchemaFor(documentType: string, content: Record<string, unkn
         .refine((list) => list.every((c) => codes.includes(c)), 'Facultad desconocida')
         .refine((list) => new Set(list).size === list.length, 'Facultad repetida'),
       observation: z.string().max(maxLen).default(''),
+      consents: z
+        .array(z.string())
+        .max(consentCodes.length)
+        .refine((list) => list.every((c) => consentCodes.includes(c)), 'Consentimiento desconocido')
+        .refine((list) => new Set(list).size === list.length, 'Consentimiento repetido')
+        .default([]),
     })
     .strict()
+    .refine((f) => consentRequired.every((c) => f.consents.includes(c)), {
+      message: 'Debe aceptar los consentimientos obligatorios.',
+      path: ['consents'],
+    })
     .refine((f) => !required || f.powers.length > 0 || f.observation.trim().length > 0, {
       message: observationOn ? 'Seleccione al menos una facultad o indique una observación.' : 'Seleccione al menos una facultad.',
       path: ['powers'],

@@ -254,6 +254,12 @@ export function EvidencePanel({
               </dd>
             </>
           )}
+          {ev.form && Array.isArray((ev.form as { consents?: string[] }).consents) && (
+            <>
+              <dt>Consentimientos marcados</dt>
+              <dd>{((ev.form as { consents?: string[] }).consents ?? []).join(', ') || 'Ninguno'}</dd>
+            </>
+          )}
           <dt>Dirección IP</dt>
           <dd>{ev.ip ?? 'desconocida'}</dd>
           <dt>Dispositivo</dt>

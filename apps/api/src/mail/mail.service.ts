@@ -75,6 +75,7 @@ export class MailService {
     );
     const s = rows[0];
     if (!s) throw new MailNotConfiguredError();
+    const notice = (await this.pool.query<{ privacy_notice: string | null }>('SELECT privacy_notice FROM tenants WHERE id = $1', [tenantId])).rows[0]?.privacy_notice ?? null;
 
     let password: string | null = null;
     if (s.password_enc) {
@@ -95,8 +96,8 @@ export class MailService {
         to: message.to,
         replyTo: s.reply_to ?? undefined,
         subject: message.subject,
-        text: message.text,
-        html: message.html,
+        text: notice ? `${message.text}\n\n--\n${notice}` : message.text,
+        html: notice && message.html ? `${message.html}<hr><p style="color:#666;font-size:12px">${noticeHtml(notice)}</p>` : message.html,
         attachments: message.attachments,
       });
       await this.pool.query(
@@ -155,4 +156,14 @@ export async function saveMailSettings(
       input.password !== undefined,
     ],
   );
+}
+
+/** El aviso es texto plano: se escapa y los saltos de línea se conservan. */
+function noticeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/\n/g, '<br>');
 }

@@ -239,6 +239,9 @@ export const api = {
   photo: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/photo`, key),
   idPhoto: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/id-photo`, key),
   idPhotoBack: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/id-photo-back`, key),
+  settings: (key: string) => call<{ privacyNotice: string | null }>('GET', '/v1/settings', key).then((r) => r.data),
+  saveSettings: (key: string, body: { privacyNotice: string | null }) =>
+    call<{ privacyNotice: string | null }>('PUT', '/v1/settings', key, body).then((r) => r.data),
   templates: (key: string) => call<{ items: TemplateListItem[] }>('GET', '/v1/templates', key).then((r) => r.data.items),
   template: (key: string, type: string, version?: number) =>
     call<TemplateDetail>('GET', version ? `/v1/templates/${type}/versions/${version}` : `/v1/templates/${type}`, key).then((r) => r.data),

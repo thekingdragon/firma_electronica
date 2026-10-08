@@ -4,6 +4,8 @@ import { powersOf, type SigningView, type ViewBlock } from './signApi';
 export interface SignForm {
   powers: string[];
   observation: string;
+  /** Códigos de los consentimientos marcados. */
+  consents: string[];
   accepted: boolean;
 }
 
@@ -12,13 +14,17 @@ export function initialForm(view: SigningView): SignForm {
   return {
     powers: (powersOf(view)?.items ?? []).filter((p) => p.defaultChecked).map((p) => p.code),
     observation: '',
+    // Los consentimientos NO vienen marcados: el firmante los marca él, uno por uno.
+    consents: [],
     accepted: false,
   };
 }
 
 /** Qué falta, por campo. El botón siempre se puede pulsar: al pulsar se marca lo que falta. */
-function missing(view: SigningView, f: SignForm): { powers?: string; accepted?: string } {
-  const out: { powers?: string; accepted?: string } = {};
+function missing(view: SigningView, f: SignForm): { powers?: string; consents?: string; accepted?: string } {
+  const out: { powers?: string; consents?: string; accepted?: string } = {};
+  const pending = view.blocks.filter((b) => b.type === 'consent' && b.required && !f.consents.includes(b.code));
+  if (pending.length > 0) out.consents = 'Debe aceptar este consentimiento para poder firmar.';
   const block = powersOf(view);
   const asks = block !== null && (block.items.length > 0 || block.observation.enabled);
   if (block && asks && f.powers.length === 0 && f.observation.trim() === '') {
@@ -41,7 +47,7 @@ export function DocumentStep({
   onContinue: () => void;
   continueLabel: string;
 }) {
-  const [shown, setShown] = useState<{ powers?: string; accepted?: string }>({});
+  const [shown, setShown] = useState<{ powers?: string; consents?: string; accepted?: string }>({});
 
   function toggle(code: string) {
     const next = form.powers.includes(code) ? form.powers.filter((c) => c !== code) : [...form.powers, code];
@@ -127,6 +133,29 @@ export function DocumentStep({
                 <p className="hint">{form.observation.length}/{maxLen}</p>
               </>
             )}
+          </div>
+        );
+      }
+      case 'consent': {
+        const marked = form.consents.includes(b.code);
+        const bad = Boolean(shown.consents) && b.required && !marked;
+        return (
+          <div key={b.id} className={`accept consent${bad ? ' invalid' : ''}`}>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={marked}
+                onChange={(e) => {
+                  onChange({ ...form, consents: e.target.checked ? [...form.consents, b.code] : form.consents.filter((c) => c !== b.code) });
+                  setShown((s) => ({ ...s, consents: undefined }));
+                }}
+              />
+              <span>
+                {b.text}
+                {b.required ? '' : ' (opcional)'}
+              </span>
+            </label>
+            {bad && <p className="error" role="alert">{shown.consents}</p>}
           </div>
         );
       }

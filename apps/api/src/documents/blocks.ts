@@ -115,6 +115,20 @@ const powers = z
       .strict(),
   })
   .strict();
+/**
+ * Un consentimiento: una casilla PROPIA que el firmante marca (o no, si no es obligatorio) y que queda
+ * registrada por separado en la evidencia. Es lo que distingue «acepto firmar» de «autorizo el tratamiento de
+ * mis datos para publicidad»: no se mezclan en una sola casilla.
+ */
+const consent = z
+  .object({
+    id,
+    type: z.literal('consent'),
+    code: z.string().regex(/^[A-Z][A-Z0-9_]{0,39}$/, 'El código va en mayúsculas, sin espacios (por ejemplo DATOS_PERSONALES)'),
+    text: z.string().min(1).max(3000),
+    required: z.boolean(),
+  })
+  .strict();
 const signerBox = z.object({ id, type: z.literal('signerBox'), title: line }).strict();
 const signatureStamp = z.object({ id, type: z.literal('signatureStamp') }).strict();
 const annex = z
@@ -130,6 +144,7 @@ export const blockSchema = z.discriminatedUnion('type', [
   list,
   dataList,
   powers,
+  consent,
   signerBox,
   signatureStamp,
   annex,
@@ -148,6 +163,7 @@ export const BLOCK_TYPES: readonly BlockType[] = [
   'list',
   'dataList',
   'powers',
+  'consent',
   'signerBox',
   'signatureStamp',
   'annex',
@@ -183,6 +199,8 @@ export function textsOf(b: Block): string[] {
       return b.items;
     case 'powers':
       return [b.intro, b.observation.label, ...b.items.map((i) => i.text)];
+    case 'consent':
+      return [b.text];
     case 'signerBox':
       return [b.title];
     case 'annex':
@@ -217,6 +235,7 @@ export function parseBlocks(input: unknown): Block[] {
   if (issues.length) throw new BlocksError(issues);
 
   const ids = new Set<string>();
+  const consentCodes = new Set<string>();
   let chars = 0;
   blocks.forEach((b, i) => {
     if (ids.has(b.id)) issues.push({ path: `bloque ${i + 1}`, message: `El identificador «${b.id}» está repetido.` });
@@ -226,6 +245,10 @@ export function parseBlocks(input: unknown): Block[] {
       for (const v of unknownVariables(t)) {
         issues.push({ path: `bloque ${i + 1}`, message: `La variable {{${v}}} no existe. Disponibles: ${VARIABLES.map((x) => `{{${x.name}}}`).join(', ')}.` });
       }
+    }
+    if (b.type === 'consent') {
+      if (consentCodes.has(b.code)) issues.push({ path: `bloque ${i + 1}`, message: `El código de consentimiento «${b.code}» está repetido.` });
+      consentCodes.add(b.code);
     }
     if (b.type === 'powers') {
       const codes = new Set<string>();
@@ -316,6 +339,7 @@ export type ViewBlock =
       items: Array<{ code: string; text: string; defaultChecked: boolean }>;
       observation: { enabled: boolean; label: string; maxLength: number };
     }
+  | { id: string; type: 'consent'; code: string; text: string; required: boolean }
   | { id: string; type: 'signerBox'; title: string; name: string; document: string }
   | { id: string; type: 'signatureStamp' }
   | { id: string; type: 'annex'; title: string; subtitle: string; text: string }
@@ -349,6 +373,8 @@ export function toViewBlocks(blocks: Block[], ctx: VariableContext, data: Record
           items: b.items.map((i) => ({ code: i.code, text: f(i.text), defaultChecked: i.defaultChecked })),
           observation: { ...b.observation, label: f(b.observation.label) },
         };
+      case 'consent':
+        return { id: b.id, type: b.type, code: b.code, text: f(b.text), required: b.required };
       case 'signerBox':
         return { id: b.id, type: b.type, title: f(b.title), name: ctx.signerName, document: `${ctx.signerDocumentType} ${ctx.signerDocumentNumber}` };
       case 'signatureStamp':
@@ -359,6 +385,11 @@ export function toViewBlocks(blocks: Block[], ctx: VariableContext, data: Record
         return { id: b.id, type: b.type };
     }
   });
+}
+
+/** Los consentimientos de la plantilla, en orden. */
+export function consentsOf(blocks: Block[]): Array<Extract<Block, { type: 'consent' }>> {
+  return blocks.filter((b): b is Extract<Block, { type: 'consent' }> => b.type === 'consent');
 }
 
 /** El bloque de facultades de la plantilla (como mucho uno). */

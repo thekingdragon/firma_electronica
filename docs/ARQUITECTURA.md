@@ -190,6 +190,16 @@ facultades, datos del firmante, constancia de la firma, anexo y salto de página
 - **Versionado inmutable:** publicar crea una versión nueva y la deja activa; una versión usada no se edita,
   y cada solicitud conserva la versión con la que nació. Queda quién publicó (`published_by`) y si se marcó
   como revisada.
+- **Consentimientos:** el bloque `consent` es una casilla PROPIA (código, texto, obligatorio u opcional). Puede haber
+  varios y cada uno se registra por separado en `form_json.consents` de la evidencia (los códigos marcados): no se
+  mezcla «acepto firmar» con «autorizo el tratamiento de mis datos» ni con una publicidad opcional. Un obligatorio sin
+  marcar impide firmar (el servidor lo vuelve a comprobar). El texto exacto que vio el firmante queda en el PDF y en
+  la versión de plantilla fijada a la solicitud. La plantilla de partida trae el consentimiento de datos personales
+  (Ley 29733) como borrador; las plantillas anteriores a los bloques NO lo reciben (no se les exige uno nuevo).
+- **Aviso de datos personales al pie de los correos:** ajuste de la corredora (`tenants.privacy_notice`, texto plano,
+  hasta 5000 caracteres, editable en el panel › Ajustes). `MailService.send` lo agrega a TODO correo del servicio
+  (código, enlace de firma, copia firmada) en texto y, escapado, en HTML. Es informativo: lo que el firmante acepta y
+  queda registrado es el bloque de consentimiento.
 - **La constancia de la firma no es un bloque:** va siempre al final del PDF y ninguna plantilla puede quitarla.
 - **En pantalla, la aceptación va siempre al final**, después de los anexos, sin importar dónde esté el bloque
   de constancia: no se puede aceptar sin haberlos tenido delante.

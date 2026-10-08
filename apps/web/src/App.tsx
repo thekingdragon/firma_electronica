@@ -7,6 +7,7 @@ import { RequestDetail } from './pages/RequestDetail';
 import { TemplateEditor } from './pages/TemplateEditor';
 import { Templates } from './pages/Templates';
 import { Requests } from './pages/Requests';
+import { Settings } from './pages/Settings';
 import { SignPage } from './sign/SignPage';
 
 function Protected() {
@@ -25,6 +26,7 @@ function Panel() {
           <Route path="/solicitudes/nueva" element={<NewRequest />} />
           <Route path="/solicitudes/:id" element={<RequestDetail />} />
           <Route path="/plantillas" element={<Templates />} />
+          <Route path="/ajustes" element={<Settings />} />
           <Route path="/plantillas/:type" element={<TemplateEditor />} />
         </Route>
         <Route path="*" element={<Navigate to="/solicitudes" replace />} />

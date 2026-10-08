@@ -40,6 +40,7 @@ export const renderBlocksDocument: DocumentRenderer = async (input: RenderInput)
   const ctx = variableContextOf(input);
   const fill = (s: string) => fillVariables(s, ctx);
   const chosen = new Set(input.form.powers);
+  const consented = new Set(input.form.consents ?? []);
 
   const f = await PdfFlow.create();
   const { doc } = f;
@@ -92,6 +93,9 @@ export const renderBlocksDocument: DocumentRenderer = async (input: RenderInput)
           f.paragraph(fill(b.observation.label), { after: 3 });
           f.paragraph(input.form.observation.trim() || NO_OBSERVATION, { indent: 10, after: 14 });
         }
+        return;
+      case 'consent':
+        f.checkbox(consented.has(b.code), fill(b.text), { indent: 0, after: 8 });
         return;
       case 'signerBox':
         f.need(90);

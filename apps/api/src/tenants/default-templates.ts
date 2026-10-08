@@ -2,7 +2,7 @@
  * Plantillas de partida que se le crean a un tenant nuevo. Son un punto de partida editable: el
  * tenant puede crear una versión nueva; una versión usada no se edita (ver document_templates).
  */
-import { blocksFromLegacy } from '../documents/blocks';
+import { blocksFromLegacy, type Block } from '../documents/blocks';
 
 export interface TemplateSeed {
   documentType: string;
@@ -52,6 +52,28 @@ La póliza de responsabilidad civil profesional debe indemnizar por los perjuici
 
 El contratante, asegurado y/o beneficiario puede solicitar la cobertura de esta póliza de responsabilidad civil profesional cuando considere que la mala asesoría del corredor del seguro ha afectado la eficacia del seguro.`;
 
+// Texto de partida del consentimiento de datos personales (Ley N.º 29733). Cada corredora lo ajusta en el panel
+// con su domicilio y su correo de contacto; el texto definitivo es materia de la revisión legal.
+const CONSENTIMIENTO_DATOS =
+  'Autorizo que mis datos personales sean tratados y almacenados en medios digitales por {{broker.legalName}}, con la ' +
+  'finalidad de brindarme asesoría en seguros, gestionar cotizaciones, emitir pólizas, atender siniestros y mantener ' +
+  'comunicación relacionada con sus servicios, conforme a la Ley N.º 29733, Ley de Protección de Datos Personales, y su ' +
+  'reglamento. Sé que puedo ejercer mis derechos de acceso, rectificación, cancelación y oposición, y pedir copia de mi ' +
+  'información, enviando una solicitud a {{broker.legalName}}. [BORRADOR: texto sujeto a revisión legal]';
+
+function carta(): Block[] {
+  const blocks = blocksFromLegacy(
+    {
+      powers: FACULTADES_CARTA.map(([code, text]) => ({ code, text, defaultChecked: true })),
+      observation: { maxLength: 1000 },
+    },
+    ANEXO_A_CARTA,
+  );
+  const i = blocks.findIndex((b) => b.type === 'signerBox');
+  blocks.splice(i < 0 ? blocks.length : i, 0, { id: 'datos', type: 'consent', code: 'DATOS_PERSONALES', text: CONSENTIMIENTO_DATOS, required: true });
+  return blocks;
+}
+
 export function defaultTemplates(): TemplateSeed[] {
   return [
     {
@@ -60,13 +82,7 @@ export function defaultTemplates(): TemplateSeed[] {
         // Mientras sea false, las plantillas no han pasado la revisión legal (ver ARQUITECTURA §8).
         legalReviewed: false,
         // La carta es una lista de bloques que la corredora edita desde el panel (otro país, otro modelo).
-        blocks: blocksFromLegacy(
-          {
-            powers: FACULTADES_CARTA.map(([code, text]) => ({ code, text, defaultChecked: true })),
-            observation: { maxLength: 1000 },
-          },
-          ANEXO_A_CARTA,
-        ),
+        blocks: carta(),
       },
       annexText: null,
       // BORRADOR: texto sujeto a revisión legal antes de usarse con clientes reales.

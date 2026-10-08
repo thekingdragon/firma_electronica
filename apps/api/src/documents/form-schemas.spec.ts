@@ -6,12 +6,12 @@ const schema = formSchemaFor('APPOINTMENT_LETTER', content)!;
 
 describe('formSchemaFor(APPOINTMENT_LETTER)', () => {
   it('acepta facultades de la plantilla y una observación', () => {
-    const r = schema.safeParse({ powers: ['RENOVACIONES', 'RECLAMOS'], observation: 'Solo Ayacucho' });
+    const r = schema.safeParse({ powers: ['RENOVACIONES', 'RECLAMOS'], observation: 'Solo Ayacucho', consents: ['DATOS_PERSONALES'] });
     expect(r.success).toBe(true);
   });
 
   it('la observación es opcional (por defecto vacía)', () => {
-    const r = schema.safeParse({ powers: ['AJUSTADOR'] });
+    const r = schema.safeParse({ powers: ['AJUSTADOR'], consents: ['DATOS_PERSONALES'] });
     expect(r.success && r.data.observation).toBe('');
   });
 
@@ -29,12 +29,12 @@ describe('formSchemaFor(APPOINTMENT_LETTER)', () => {
   });
 
   it('sin facultades pero con observación sí vale (el firmante especifica lo suyo)', () => {
-    expect(schema.safeParse({ powers: [], observation: 'Solo presentar reclamos' }).success).toBe(true);
+    expect(schema.safeParse({ powers: [], observation: 'Solo presentar reclamos', consents: ['DATOS_PERSONALES'] }).success).toBe(true);
   });
 
   it('respeta el largo máximo de la observación de la plantilla', () => {
-    expect(schema.safeParse({ powers: ['AJUSTADOR'], observation: 'x'.repeat(1000) }).success).toBe(true);
-    expect(schema.safeParse({ powers: ['AJUSTADOR'], observation: 'x'.repeat(1001) }).success).toBe(false);
+    expect(schema.safeParse({ powers: ['AJUSTADOR'], observation: 'x'.repeat(1000), consents: ['DATOS_PERSONALES'] }).success).toBe(true);
+    expect(schema.safeParse({ powers: ['AJUSTADOR'], observation: 'x'.repeat(1001), consents: ['DATOS_PERSONALES'] }).success).toBe(false);
   });
 
   it('un campo extra es un error, no se ignora', () => {

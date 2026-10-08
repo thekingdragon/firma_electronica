@@ -124,7 +124,7 @@ export function SignPage() {
     setSubmitError(null);
     const body = new FormData();
     body.append('accepted', 'true');
-    body.append('form', JSON.stringify({ powers: form.powers, observation: form.observation }));
+    body.append('form', JSON.stringify({ powers: form.powers, observation: form.observation, consents: form.consents }));
     body.append('clientInfo', JSON.stringify(clientInfo()));
     if (photo) {
       body.append('photo', photo.blob, 'foto.jpg');

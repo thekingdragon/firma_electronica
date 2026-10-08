@@ -20,6 +20,7 @@ export type Block =
       items: PowerItem[];
       observation: { enabled: boolean; label: string; maxLength: number };
     }
+  | { id: string; type: 'consent'; code: string; text: string; required: boolean }
   | { id: string; type: 'signerBox'; title: string }
   | { id: string; type: 'signatureStamp' }
   | { id: string; type: 'annex'; title: string; subtitle: string; text: string }
@@ -35,6 +36,7 @@ export const BLOCK_LABEL: Record<BlockType, string> = {
   list: 'Lista de elementos',
   dataList: 'Lista de datos de la solicitud',
   powers: 'Facultades (las marca el firmante)',
+  consent: 'Consentimiento (casilla propia)',
   signerBox: 'Datos del firmante',
   signatureStamp: 'Constancia de la firma y aceptación',
   annex: 'Anexo (página nueva)',
@@ -48,6 +50,7 @@ export const BLOCK_HELP: Partial<Record<BlockType, string>> = {
   issuerHeader: 'Razón social, código de registro y fecha, arriba a la izquierda y a la derecha.',
   dataList: 'Lista que llega con la solicitud (en la carta: los seguros nombrados, dato «insurances»).',
   powers: 'El firmante marca cuáles otorga. Solo puede haber un bloque de facultades.',
+  consent: 'Casilla aparte que el firmante marca. Obligatoria: sin marcarla no puede firmar. Opcional: queda registrado si la marcó o no. Cada una se guarda por separado.',
   signerBox: 'Nombre y documento del firmante, tomados de la solicitud.',
   signatureStamp: 'En el PDF queda aquí la fecha de la firma y el texto de aceptación. En pantalla, la aceptación va siempre al final.',
   annex: 'Empieza en una página nueva. Una línea sola y corta se muestra como subtítulo.',
@@ -83,6 +86,8 @@ export function newBlock(type: BlockType): Block {
         items: [{ code: 'FACULTAD_1', text: '', defaultChecked: true }],
         observation: { enabled: true, label: 'Observación:', maxLength: 1000 },
       };
+    case 'consent':
+      return { id, type, code: 'CONSENTIMIENTO_1', text: '', required: true };
     case 'signerBox':
       return { id, type, title: 'Datos del contratante o asegurado' };
     case 'signatureStamp':
@@ -114,6 +119,10 @@ export function localProblems(blocks: Block[]): string[] {
         if (!it.text.trim()) out.push(`${where}, facultad ${j + 1}: falta el texto.`);
         if (!/^[A-Z][A-Z0-9_]{0,39}$/.test(it.code)) out.push(`${where}, facultad ${j + 1}: el código va en mayúsculas, sin espacios.`);
       });
+    }
+    if (b.type === 'consent') {
+      if (!b.text.trim()) out.push(`${where}: falta el texto del consentimiento.`);
+      if (!/^[A-Z][A-Z0-9_]{0,39}$/.test(b.code)) out.push(`${where}: el código va en mayúsculas, sin espacios.`);
     }
     if (b.type === 'annex' && !b.text.trim()) out.push(`${where}: falta el texto del anexo.`);
     if (b.type === 'dataList' && !/^[A-Za-z][A-Za-z0-9_]{0,40}$/.test(b.dataKey)) out.push(`${where}: el nombre del dato no es válido.`);

@@ -118,7 +118,7 @@ describe('publicar una versión de la plantilla', () => {
       .post(`/v1/sign/${token}/submit`)
       .set('X-Session', v.body.sessionToken)
       .field('accepted', 'true')
-      .field('form', JSON.stringify({ powers: ['RENOVACIONES'], observation: '' }))
+      .field('form', JSON.stringify({ powers: ['RENOVACIONES'], observation: '', consents: ['DATOS_PERSONALES'] }))
       .expect(200);
     const ev = (await pool.query(`SELECT clause_text FROM signature_evidence e JOIN signature_requests r ON r.id=e.request_id WHERE r.token_hash IS NOT NULL ORDER BY e.captured_at DESC LIMIT 1`)).rows[0];
     expect(ev.clause_text).toBe('CLÁUSULA DEL PDF');

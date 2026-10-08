@@ -169,6 +169,23 @@ function Fields({ block, onChange }: { block: Block; onChange: (b: Block) => voi
           )}
         </div>
       );
+    case 'consent':
+      return (
+        <div>
+          <label htmlFor={`ct-${id}`}>Texto del consentimiento</label>
+          <textarea id={`ct-${id}`} rows={5} maxLength={3000} value={block.text} onChange={(e) => onChange({ ...block, text: e.target.value })} />
+          <div className="row-checks">
+            <label className="inline">
+              Código (queda en la evidencia)
+              <input type="text" value={block.code} onChange={(e) => onChange({ ...block, code: codeOf(e.target.value) })} />
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={block.required} onChange={(e) => onChange({ ...block, required: e.target.checked })} />
+              <span>Obligatorio para firmar</span>
+            </label>
+          </div>
+        </div>
+      );
     case 'signerBox':
       return (
         <div>

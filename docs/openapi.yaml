@@ -184,6 +184,34 @@ paths:
             application/pdf:
               schema: { type: string, format: binary }
         '409': { description: La solicitud todavía no está firmada }
+  /v1/settings:
+    get:
+      summary: Ajustes de la corredora
+      security: [{ apiKey: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Settings' }
+    put:
+      summary: Guardar los ajustes (hoy, el aviso de datos personales)
+      description: |
+        `privacyNotice` es texto plano (máximo 5000 caracteres). Va al pie de TODOS los correos que envía el servicio
+        en nombre de la corredora: código de verificación, enlace de firma y copia firmada. Vacío o `null` lo quita.
+      security: [{ apiKey: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Settings' }
+      responses:
+        '200':
+          description: Guardado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Settings' }
+        '422': { description: VALIDATION_ERROR }
   /v1/templates:
     get:
       summary: Plantillas de documento de la corredora (la versión activa de cada tipo)
@@ -573,14 +601,20 @@ components:
             idPhotoRequired: { type: boolean }
             idPhotoBackRequired: { type: boolean }
         expiresAt: { type: string, format: date-time }
+    Settings:
+      type: object
+      required: [privacyNotice]
+      properties:
+        privacyNotice: { type: string, nullable: true, maxLength: 5000 }
     Block:
       type: object
       required: [id, type]
       description: |
         Un bloque del documento. `type` es uno de: issuerHeader, title, heading, paragraph, list, dataList,
-        powers, signerBox, signatureStamp, annex, pageBreak. Los textos admiten las variables de `variables`
+        powers, consent, signerBox, signatureStamp, annex, pageBreak. Los textos admiten las variables de `variables`
         (`{{signer.name}}`…); cualquier otra variable se rechaza al publicar. Solo puede haber uno de
-        issuerHeader, powers, signerBox y signatureStamp.
+        issuerHeader, powers, signerBox y signatureStamp. Los consentimientos (`consent`: casilla propia, obligatoria u
+        opcional, con su código) pueden ser varios y se registran por separado en la evidencia (`form.consents`).
       properties:
         id: { type: string }
         type: { type: string }

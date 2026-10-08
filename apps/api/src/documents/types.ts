@@ -10,7 +10,7 @@ export interface RenderInput {
   annexText: string | null;
   clauseText: string;
   /** Lo que el firmante marcó o escribió en el formulario. */
-  form: { powers: string[]; observation: string };
+  form: { powers: string[]; observation: string; consents?: string[] };
   signedAt: Date;
   evidence: {
     ip: string | null;

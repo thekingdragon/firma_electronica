@@ -33,7 +33,7 @@ const body = (email = 'ana@example.com', withOtp = true) => ({
   delivery: { mode: 'HOST' },
 });
 
-const FORM = { powers: ['GESTIONAR_SOLICITUD', 'RENOVACIONES'], observation: 'Solo para Ayacucho' };
+const FORM = { powers: ['GESTIONAR_SOLICITUD', 'RENOVACIONES'], observation: 'Solo para Ayacucho', consents: ['DATOS_PERSONALES'] };
 
 describe('firma: foto, envío y evidencia', () => {
   let app: INestApplication;

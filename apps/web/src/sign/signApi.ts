@@ -34,6 +34,7 @@ export type ViewBlock =
   | { id: string; type: 'paragraph'; text: string; align: 'left' | 'center' | 'right'; bold: boolean; small: boolean }
   | { id: string; type: 'list'; items: string[]; style: 'check' | 'bullet' | 'letters' }
   | { id: string; type: 'powers'; intro: string; items: PowerDef[]; observation: { enabled: boolean; label: string; maxLength: number } }
+  | { id: string; type: 'consent'; code: string; text: string; required: boolean }
   | { id: string; type: 'signerBox'; title: string; name: string; document: string }
   | { id: string; type: 'signatureStamp' }
   | { id: string; type: 'annex'; title: string; subtitle: string; text: string }

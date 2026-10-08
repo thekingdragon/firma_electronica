@@ -22,7 +22,7 @@ import { MaintenanceService } from './maintenance.service';
 const URL_DB = testDatabaseUrl();
 const SECRETS_KEY = randomBytes(32);
 const FOTO = makePng(1280, 720);
-const FORM = { powers: ['RENOVACIONES'], observation: '' };
+const FORM = { powers: ['RENOVACIONES'], observation: '', consents: ['DATOS_PERSONALES'] };
 
 interface Hit {
   headers: IncomingHttpHeaders;

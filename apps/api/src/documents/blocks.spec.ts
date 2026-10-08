@@ -272,3 +272,73 @@ describe('renderBlocksDocument', () => {
     await expect(renderBlocksDocument(input({ content: { blocks: [{ id: 'x', type: 'raro' }] } }))).rejects.toThrow(BlocksError);
   });
 });
+
+describe('consentimientos', () => {
+  const con = (over: Record<string, unknown> = {}) => ({ id: 'c1', type: 'consent', code: 'DATOS', text: 'Autorizo el tratamiento de mis datos.', required: true, ...over });
+  const doc = (...cs: unknown[]) => [{ id: 't', type: 'title', text: 'X' }, ...cs];
+
+  it('se validan: código en mayúsculas, texto no vacío, sin repetir códigos ni variables inexistentes', () => {
+    expect(() => parseBlocks(doc(con()))).not.toThrow();
+    expect(() => parseBlocks(doc(con({ code: 'datos' })))).toThrow(BlocksError);
+    expect(() => parseBlocks(doc(con({ text: '' })))).toThrow(BlocksError);
+    expect(() => parseBlocks(doc(con({ text: 'Hola {{x.y}}' })))).toThrow(BlocksError);
+    expect(() => parseBlocks(doc(con(), con({ id: 'c2' })))).toThrow(/repetido/);
+    expect(() => parseBlocks(doc(con({ extra: 1 })))).toThrow(BlocksError);
+  });
+
+  it('puede haber varios, con códigos distintos', () => {
+    expect(() => parseBlocks(doc(con(), con({ id: 'c2', code: 'PUBLICIDAD', required: false })))).not.toThrow();
+  });
+
+  it('el firmante los ve con las variables completas', () => {
+    const v = toViewBlocks(parseBlocks(doc(con({ text: 'Autorizo a {{broker.legalName}}.' }))), ctx, {});
+    expect(v[1]).toEqual({ id: 'c1', type: 'consent', code: 'DATOS', text: 'Autorizo a Mavac Corredores de Seguros SAC.', required: true });
+  });
+
+  describe('formulario', () => {
+    const schema = (...cs: unknown[]) => formSchemaFor('APPOINTMENT_LETTER', { blocks: doc(...cs) })!;
+
+    it('un consentimiento obligatorio sin marcar no deja firmar', () => {
+      const s = schema(con());
+      expect(s.safeParse({ powers: [], observation: '' }).success).toBe(false);
+      expect(s.safeParse({ powers: [], observation: '', consents: [] }).success).toBe(false);
+      expect(s.safeParse({ powers: [], observation: '', consents: ['DATOS'] }).success).toBe(true);
+    });
+
+    it('uno opcional puede quedar sin marcar, y si se marca queda registrado', () => {
+      const s = schema(con({ required: false }));
+      expect(s.safeParse({ powers: [], observation: '' }).success).toBe(true);
+      const r = s.safeParse({ powers: [], observation: '', consents: ['DATOS'] });
+      expect(r.success && r.data.consents).toEqual(['DATOS']);
+    });
+
+    it('un código inventado o repetido se rechaza', () => {
+      const s = schema(con());
+      expect(s.safeParse({ powers: [], observation: '', consents: ['DATOS', 'INVENTADO'] }).success).toBe(false);
+      expect(s.safeParse({ powers: [], observation: '', consents: ['DATOS', 'DATOS'] }).success).toBe(false);
+    });
+
+    it('sin bloques de consentimiento no se acepta ninguno', () => {
+      const s = formSchemaFor('APPOINTMENT_LETTER', { blocks: doc() })!;
+      expect(s.safeParse({ powers: [], observation: '', consents: ['DATOS'] }).success).toBe(false);
+    });
+  });
+
+  it('el PDF cambia según el consentimiento marcado', async () => {
+    const input = (consents: string[]): RenderInput => ({
+      reference: 'R-1',
+      issuer: { legalName: 'X SAC', registryCode: null },
+      signer: { name: 'Ana', documentType: 'DNI', documentNumber: '1' },
+      data: {},
+      content: { blocks: doc(con({ required: false })) },
+      annexText: null,
+      clauseText: 'ok',
+      form: { powers: [], observation: '', consents },
+      signedAt: new Date('2026-01-01T00:00:00Z'),
+      evidence: { ip: null, otpVerifiedAt: null, challengeCode: null, photo: null },
+    });
+    const a = await renderBlocksDocument(input(['DATOS']));
+    const b2 = await renderBlocksDocument(input([]));
+    expect(Buffer.from(a).equals(Buffer.from(b2))).toBe(false);
+  });
+});

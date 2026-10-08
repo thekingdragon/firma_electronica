@@ -288,6 +288,77 @@ describe('API de plantillas', () => {
       expect(titulo).not.toBe('TEXTO NUEVO');
     });
 
+    describe('consentimientos al firmar', () => {
+      const consentimientos = (extra: unknown[] = []) => [
+        { id: 'tit', type: 'title', text: 'DOCUMENTO CON CONSENTIMIENTOS' },
+        { id: 'c1', type: 'consent', code: 'DATOS', text: 'Autorizo el tratamiento de mis datos a {{broker.legalName}}.', required: true },
+        { id: 'c2', type: 'consent', code: 'PUBLICIDAD', text: 'Autorizo recibir publicidad.', required: false },
+        { id: 'sello', type: 'signatureStamp' },
+        ...extra,
+      ];
+
+      async function sesion() {
+        await http().post(`/v1/templates/${T}`).set(as(keyA)).send(publicable({ blocks: consentimientos() }));
+        const c = await http()
+          .post('/v1/requests')
+          .set(as(keyA))
+          .send({
+            documentType: T,
+            externalRef: `ref-${randomBytes(4).toString('hex')}`,
+            signer: { name: 'Ana Pérez Quispe', documentType: 'DNI', documentNumber: '12345678' },
+            data: { insurances: ['SCTR'] },
+            otp: { channel: 'EMAIL', to: 'ana@example.com' },
+            delivery: { mode: 'HOST' },
+          });
+        const token = (c.body.signUrl as string).split('/s/')[1];
+        const otp = await http().post(`/v1/sign/${token}/otp`);
+        const v = await http().post(`/v1/sign/${token}/verify`).send({ code: otp.body.devCode });
+        return { id: c.body.id as string, token, session: v.body.sessionToken as string, view: v.body.view };
+      }
+      const firmar = (s: { token: string; session: string }, form: unknown) =>
+        http().post(`/v1/sign/${s.token}/submit`).set('X-Session', s.session).field('accepted', 'true').field('form', JSON.stringify(form));
+
+      it('el firmante los recibe como bloques, con sus textos completos y si son obligatorios', async () => {
+        const s = await sesion();
+        const cs = s.view.blocks.filter((b: { type: string }) => b.type === 'consent');
+        expect(cs).toEqual([
+          { id: 'c1', type: 'consent', code: 'DATOS', text: 'Autorizo el tratamiento de mis datos a Corredora A SAC.', required: true },
+          { id: 'c2', type: 'consent', code: 'PUBLICIDAD', text: 'Autorizo recibir publicidad.', required: false },
+        ]);
+      });
+
+      it('sin marcar el obligatorio no se firma y no se guarda nada', async () => {
+        const s = await sesion();
+        const r = await firmar(s, { powers: [], observation: '', consents: [] });
+        expect(r.status).toBe(422);
+        expect(JSON.stringify(r.body)).toContain('consentimientos obligatorios');
+        expect((await pool.query(`SELECT status FROM signature_requests WHERE id=$1`, [s.id])).rows[0].status).toBe('PENDING');
+        expect((await pool.query(`SELECT 1 FROM signature_evidence WHERE request_id=$1`, [s.id])).rowCount).toBe(0);
+      });
+
+      it('marcando solo el obligatorio se firma, y queda registrado cuál se marcó y cuál no', async () => {
+        const s = await sesion();
+        const r = await firmar(s, { powers: [], observation: '', consents: ['DATOS'] });
+        expect(r.status).toBe(200);
+        const ev = (await pool.query(`SELECT form_json FROM signature_evidence WHERE request_id=$1`, [s.id])).rows[0];
+        expect(ev.form_json).toEqual({ powers: [], observation: '', consents: ['DATOS'] });
+      });
+
+      it('marcando también el opcional, ambos quedan registrados', async () => {
+        const s = await sesion();
+        expect((await firmar(s, { powers: [], observation: '', consents: ['DATOS', 'PUBLICIDAD'] })).status).toBe(200);
+        const ev = (await pool.query(`SELECT form_json FROM signature_evidence WHERE request_id=$1`, [s.id])).rows[0];
+        expect(ev.form_json.consents).toEqual(['DATOS', 'PUBLICIDAD']);
+        const evidence = await http().get(`/v1/requests/${s.id}/evidence`).set(as(keyA));
+        expect(evidence.body.form.consents).toEqual(['DATOS', 'PUBLICIDAD']);
+      });
+
+      it('un código que no existe en la plantilla se rechaza', async () => {
+        const s = await sesion();
+        expect((await firmar(s, { powers: [], observation: '', consents: ['DATOS', 'INVENTADO'] })).status).toBe(422);
+      });
+    });
+
     it('un documento sin bloque de facultades no pide nada al firmante en el formulario', async () => {
       const sinFacultades = blocks().filter((b) => b.type !== 'powers');
       await http().post(`/v1/templates/${T}`).set(as(keyA)).send(publicable({ blocks: sinFacultades }));
