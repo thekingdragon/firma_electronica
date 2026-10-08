@@ -54,7 +54,7 @@ export interface SigningView {
   data: { insurances?: string[] } & Record<string, unknown>;
   blocks: ViewBlock[];
   clause: { version: number; text: string };
-  policy: { photoRequired: boolean; photoChallengeRequired: boolean; idPhotoRequired: boolean };
+  policy: { photoRequired: boolean; photoChallengeRequired: boolean; idPhotoRequired: boolean; idPhotoBackRequired: boolean };
   expiresAt: string;
 }
 

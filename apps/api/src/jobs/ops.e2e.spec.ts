@@ -74,7 +74,7 @@ describe('operación: webhooks, revocar, vencimiento, revisión y retención', (
     const t = await createTenant(pool, { name, country: 'PE', legalName: `${name} SAC`, webhookUrl }, withSecret ? SECRETS_KEY : null);
     T[name] = { key: t.apiKey, id: t.tenant.id, secret: t.webhookSecret };
     // Por defecto estos tenants no exigen OTP ni foto: el flujo de firma se reduce a lo que se prueba.
-    await pool.query(`UPDATE document_templates SET otp_required=false, photo_required=false, photo_challenge_required=false, id_photo_required=false WHERE tenant_id=$1`, [t.tenant.id]);
+    await pool.query(`UPDATE document_templates SET otp_required=false, photo_required=false, photo_challenge_required=false, id_photo_required=false, id_photo_back_required=false WHERE tenant_id=$1`, [t.tenant.id]);
     return t.tenant.id;
   }
 
@@ -103,7 +103,7 @@ describe('operación: webhooks, revocar, vencimiento, revisión y retención', (
       ? ((await http(a).post(`/v1/sign/${s.token}/photo-challenge`).set('X-Session', session).expect(200)).body.challengeId as string)
       : null;
     const req = http(a).post(`/v1/sign/${s.token}/submit`).set('X-Session', session).field('accepted', 'true').field('form', JSON.stringify(FORM));
-    if (challengeId) req.field('challengeId', challengeId).attach('photo', FOTO, { filename: 'f.png', contentType: 'image/png' }).attach('idPhoto', FOTO, { filename: 'd.png', contentType: 'image/png' });
+    if (challengeId) req.field('challengeId', challengeId).attach('photo', FOTO, { filename: 'f.png', contentType: 'image/png' }).attach('idPhoto', FOTO, { filename: 'd.png', contentType: 'image/png' }).attach('idPhotoBack', FOTO, { filename: 'r.png', contentType: 'image/png' });
     return req;
   }
 

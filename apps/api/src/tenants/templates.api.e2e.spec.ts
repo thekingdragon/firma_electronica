@@ -39,7 +39,7 @@ const blocks = (titulo = 'MI CARTA {{broker.legalName}}') => [
 const publicable = (over: Record<string, unknown> = {}) => ({
   blocks: blocks(),
   clauseText: 'Acepto firmar electrónicamente.',
-  policy: { otpRequired: true, photoRequired: false, photoChallengeRequired: false, idPhotoRequired: false },
+  policy: { otpRequired: true, photoRequired: false, photoChallengeRequired: false, idPhotoRequired: false, idPhotoBackRequired: false },
   legalReviewed: false,
   publishedBy: 'Gustavo (admin)',
   ...over,
@@ -103,7 +103,7 @@ describe('API de plantillas', () => {
       expect(r.body.blocks.map((b: { type: string }) => b.type)).toEqual(
         expect.arrayContaining(['issuerHeader', 'title', 'powers', 'signerBox', 'signatureStamp', 'annex']),
       );
-      expect(r.body.policy).toEqual({ otpRequired: true, photoRequired: true, photoChallengeRequired: true, idPhotoRequired: true });
+      expect(r.body.policy).toEqual({ otpRequired: true, photoRequired: true, photoChallengeRequired: true, idPhotoRequired: true, idPhotoBackRequired: true });
       expect(r.body.variables.map((v: { name: string }) => v.name)).toContain('signer.name');
       expect(r.body.versions).toEqual([expect.objectContaining({ version: 1, active: true })]);
       expect(r.body.clauseText).toContain('BORRADOR');
@@ -182,8 +182,12 @@ describe('API de plantillas', () => {
       expect((await p({ extra: 1 })).status).toBe(422);
       expect((await p({ publishedBy: '' })).status).toBe(422);
       expect((await p({ clauseText: '   ' })).status).toBe(422);
-      expect((await p({ policy: { otpRequired: true, photoRequired: false, photoChallengeRequired: true, idPhotoRequired: false } })).status).toBe(422);
-      expect((await p({ policy: { otpRequired: true, photoRequired: false, photoChallengeRequired: false, idPhotoRequired: true } })).status).toBe(422);
+      expect((await p({ policy: { otpRequired: true, photoRequired: false, photoChallengeRequired: true, idPhotoRequired: false, idPhotoBackRequired: false } })).status).toBe(422);
+      expect((await p({ policy: { otpRequired: true, photoRequired: false, photoChallengeRequired: false, idPhotoRequired: true, idPhotoBackRequired: false } })).status).toBe(422);
+      // El reverso exige el frente.
+      expect((await p({ policy: { otpRequired: true, photoRequired: true, photoChallengeRequired: false, idPhotoRequired: false, idPhotoBackRequired: true } })).status).toBe(422);
+      // Y sin el campo nuevo, la política no es de este contrato.
+      expect((await p({ policy: { otpRequired: true, photoRequired: false, photoChallengeRequired: false, idPhotoRequired: false } })).status).toBe(422);
       expect((await p({ blocks: [] })).status).toBe(422);
       expect((await p({ blocks: [{ id: 'x', type: 'script', text: '<script>' }] })).status).toBe(422);
     });

@@ -94,12 +94,12 @@ export class MaintenanceService implements OnModuleInit, OnApplicationShutdown {
       const lock = await lockClient.query<{ ok: boolean }>('SELECT pg_try_advisory_lock($1) AS ok', [LOCK_PURGE]);
       if (!lock.rows[0].ok) return 0;
       try {
-        const { rows } = await this.pool.query<{ request_id: string; photo_path: string | null; id_photo_path: string | null }>(
-          `SELECT e.request_id, e.photo_path, e.id_photo_path
+        const { rows } = await this.pool.query<{ request_id: string; photo_path: string | null; id_photo_path: string | null; id_back_path: string | null }>(
+          `SELECT e.request_id, e.photo_path, e.id_photo_path, e.id_back_path
              FROM signature_evidence e
              JOIN signature_requests r ON r.id = e.request_id
              JOIN tenants t ON t.id = r.tenant_id
-            WHERE (e.photo_path IS NOT NULL OR e.id_photo_path IS NOT NULL)
+            WHERE (e.photo_path IS NOT NULL OR e.id_photo_path IS NOT NULL OR e.id_back_path IS NOT NULL)
               AND r.signed_at + make_interval(days => t.retention_days) <= now()
             ORDER BY r.signed_at
             LIMIT ${PURGE_BATCH}`,
@@ -110,10 +110,12 @@ export class MaintenanceService implements OnModuleInit, OnApplicationShutdown {
           // (borrar un archivo que ya no está no es un error).
           if (row.photo_path) await this.storage.remove(row.photo_path);
           if (row.id_photo_path) await this.storage.remove(row.id_photo_path);
+          if (row.id_back_path) await this.storage.remove(row.id_back_path);
           const upd = await this.pool.query(
-            `UPDATE signature_evidence SET photo_path = NULL, id_photo_path = NULL, photo_deleted_at = now()
-              WHERE request_id = $1 AND photo_path IS NOT DISTINCT FROM $2 AND id_photo_path IS NOT DISTINCT FROM $3`,
-            [row.request_id, row.photo_path, row.id_photo_path],
+            `UPDATE signature_evidence SET photo_path = NULL, id_photo_path = NULL, id_back_path = NULL, photo_deleted_at = now()
+              WHERE request_id = $1 AND photo_path IS NOT DISTINCT FROM $2 AND id_photo_path IS NOT DISTINCT FROM $3
+                AND id_back_path IS NOT DISTINCT FROM $4`,
+            [row.request_id, row.photo_path, row.id_photo_path, row.id_back_path],
           );
           if (upd.rowCount) {
             await this.pool.query(`INSERT INTO access_log (request_id, event) VALUES ($1, 'photo_purged')`, [row.request_id]);

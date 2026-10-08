@@ -70,16 +70,16 @@ export class SignController {
   @RateBucketOf('submit')
   @HttpCode(200)
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'photo', maxCount: 1 }, { name: 'idPhoto', maxCount: 1 }], {
+    FileFieldsInterceptor([{ name: 'photo', maxCount: 1 }, { name: 'idPhoto', maxCount: 1 }, { name: 'idPhotoBack', maxCount: 1 }], {
       storage: memoryStorage(),
       // Un archivo, de tamaño acotado: lo que llega por la red no es de fiar.
-      limits: { fileSize: PHOTO_POLICY.maxBytes, files: 2, fields: 10, fieldSize: 20_000 },
+      limits: { fileSize: PHOTO_POLICY.maxBytes, files: 3, fields: 10, fieldSize: 20_000 },
     }),
   )
   submit(
     @Param('token') token: string,
     @Headers('x-session') session: string | undefined,
-    @UploadedFiles() files: { photo?: Express.Multer.File[]; idPhoto?: Express.Multer.File[] } | undefined,
+    @UploadedFiles() files: { photo?: Express.Multer.File[]; idPhoto?: Express.Multer.File[]; idPhotoBack?: Express.Multer.File[] } | undefined,
     @Body() body: Record<string, unknown> | undefined,
     @Req() req: Request,
   ): Promise<SubmitResult> {
@@ -89,6 +89,7 @@ export class SignController {
       {
         photo: files?.photo?.[0]?.buffer,
         idPhoto: files?.idPhoto?.[0]?.buffer,
+        idPhotoBack: files?.idPhotoBack?.[0]?.buffer,
         challengeId: typeof body?.challengeId === 'string' ? body.challengeId : undefined,
         accepted: body?.accepted,
         form: body?.form,

@@ -82,6 +82,11 @@ export class RequestsController {
     await this.sendFile(res, await this.requests.getFile(tenant, id, 'document'));
   }
 
+  @Get(':id/id-photo-back')
+  async idPhotoBack(@CurrentTenant() tenant: Tenant, @Param('id') id: string, @Res() res: Response): Promise<void> {
+    await this.sendFile(res, await this.requests.getFile(tenant, id, 'idPhotoBack'));
+  }
+
   @Get(':id/id-photo')
   async idPhoto(@CurrentTenant() tenant: Tenant, @Param('id') id: string, @Res() res: Response): Promise<void> {
     await this.sendFile(res, await this.requests.getFile(tenant, id, 'idPhoto'));

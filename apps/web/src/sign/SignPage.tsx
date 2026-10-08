@@ -7,7 +7,7 @@ import { ReviewStep } from './ReviewStep';
 import { SignApiError, loadSession, saveSession, signApi, type SignIntro, type SigningView, type SubmitResult, type Verified } from './signApi';
 import { VerifyStep } from './VerifyStep';
 
-type Step = 'loading' | 'closed' | 'verify' | 'document' | 'idphoto' | 'photo' | 'review' | 'done';
+type Step = 'loading' | 'closed' | 'verify' | 'document' | 'idphoto' | 'idphotoBack' | 'photo' | 'review' | 'done';
 
 const CLOSED_TITLES: Record<string, string> = {
   ALREADY_SIGNED: 'Este documento ya fue firmado',
@@ -37,6 +37,7 @@ export function SignPage() {
   const [form, setForm] = useState<SignForm | null>(null);
   const [photo, setPhoto] = useState<TakenPhoto | null>(null);
   const [idPhoto, setIdPhoto] = useState<TakenPhoto | null>(null);
+  const [idPhotoBack, setIdPhotoBack] = useState<TakenPhoto | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -130,12 +131,15 @@ export function SignPage() {
       if (photo.challenge) body.append('challengeId', photo.challenge.challengeId);
     }
     if (idPhoto) body.append('idPhoto', idPhoto.blob, 'documento.jpg');
+    if (idPhotoBack) body.append('idPhotoBack', idPhotoBack.blob, 'documento-reverso.jpg');
     try {
       const r = await signApi.submit(token, session, body);
       if (photo) URL.revokeObjectURL(photo.url);
       if (idPhoto) URL.revokeObjectURL(idPhoto.url);
+      if (idPhotoBack) URL.revokeObjectURL(idPhotoBack.url);
       setPhoto(null);
       setIdPhoto(null);
+      setIdPhotoBack(null);
       setResult(r);
       setStep('done');
     } catch (e) {
@@ -147,6 +151,11 @@ export function SignPage() {
         setPhoto(null);
         setNotice(`${e.message}`);
         setStep('photo');
+      } else if (e.code === 'ID_PHOTO_BACK_TOO_SMALL' || e.code === 'ID_PHOTO_BACK_INVALID' || e.code === 'ID_PHOTO_BACK_REQUIRED') {
+        if (idPhotoBack) URL.revokeObjectURL(idPhotoBack.url);
+        setIdPhotoBack(null);
+        setNotice(e.message);
+        setStep('idphotoBack');
       } else if (e.code === 'ID_PHOTO_TOO_SMALL' || e.code === 'ID_PHOTO_INVALID' || e.code === 'ID_PHOTO_REQUIRED') {
         if (idPhoto) URL.revokeObjectURL(idPhoto.url);
         setIdPhoto(null);
@@ -181,7 +190,10 @@ export function SignPage() {
   const labels: { id: Step; label: string }[] = [];
   if (intro?.otpRequired) labels.push({ id: 'verify', label: 'Verificación' });
   labels.push({ id: 'document', label: 'Documento' });
-  if (view?.policy.idPhotoRequired) labels.push({ id: 'idphoto', label: `Foto ${view.signer.documentType}` });
+  if (view?.policy.idPhotoRequired) {
+    labels.push({ id: 'idphoto', label: view.policy.idPhotoBackRequired ? `${view.signer.documentType} frente` : `Foto ${view.signer.documentType}` });
+  }
+  if (view?.policy.idPhotoBackRequired) labels.push({ id: 'idphotoBack', label: `${view.signer.documentType} reverso` });
   if (view?.policy.photoRequired ?? true) labels.push({ id: 'photo', label: view?.policy.idPhotoRequired ? 'Selfie' : 'Fotografía' });
   labels.push({ id: 'review', label: 'Firma' });
   const current = labels.findIndex((l) => l.id === step);
@@ -240,6 +252,26 @@ export function SignPage() {
           onTaken={(p) => {
             setIdPhoto(p);
             setNotice(null);
+            setStep(view.policy.idPhotoBackRequired ? 'idphotoBack' : 'photo');
+          }}
+          onSessionExpired={() => toVerify('Su sesión venció. Verifique su código otra vez.')}
+        />
+      )}
+
+      {step === 'idphotoBack' && view && session && (
+        <PhotoStep
+          kind="documentBack"
+          token={token}
+          session={session}
+          view={view}
+          initial={idPhotoBack}
+          onBack={() => {
+            setNotice(null);
+            setStep('idphoto');
+          }}
+          onTaken={(p) => {
+            setIdPhotoBack(p);
+            setNotice(null);
             setStep('photo');
           }}
           onSessionExpired={() => toVerify('Su sesión venció. Verifique su código otra vez.')}
@@ -254,7 +286,7 @@ export function SignPage() {
           initial={photo}
           onBack={() => {
             setNotice(null);
-            setStep(view.policy.idPhotoRequired ? 'idphoto' : 'document');
+            setStep(view.policy.idPhotoBackRequired ? 'idphotoBack' : view.policy.idPhotoRequired ? 'idphoto' : 'document');
           }}
           onTaken={(p) => {
             setPhoto(p);
@@ -271,6 +303,7 @@ export function SignPage() {
           form={form}
           photo={photo}
           idPhoto={idPhoto}
+          idPhotoBack={idPhotoBack}
           busy={submitting}
           error={submitError}
           onBack={() => {

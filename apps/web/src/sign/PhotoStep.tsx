@@ -35,7 +35,7 @@ export function PhotoStep({
   onSessionExpired,
 }: {
   /** `selfie`: el rostro con el papel y el código. `document`: solo el documento de identidad. */
-  kind?: 'selfie' | 'document';
+  kind?: 'selfie' | 'document' | 'documentBack';
   token: string;
   session: string;
   view: SigningView;
@@ -50,7 +50,8 @@ export function PhotoStep({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const left = useSecondsUntil(challenge?.expiresAt ?? null);
-  const isDocument = kind === 'document';
+  const isBack = kind === 'documentBack';
+  const isDocument = kind === 'document' || isBack;
   // Selfie: caja y recorte verticales (4:5), lo justo para que entre una cabeza y algo más. Documento: forma de tarjeta.
   const frameAspect = isDocument ? CARD_ASPECT : 0.8;
   const needsChallenge = !isDocument && view.policy.photoChallengeRequired;
@@ -125,8 +126,13 @@ export function PhotoStep({
 
   return (
     <section className="card">
-      <h2>{isDocument ? 'Foto de su documento' : 'Su fotografía'}</h2>
-      {isDocument ? (
+      <h2>{isBack ? 'Reverso de su documento' : isDocument ? 'Foto de su documento' : 'Su fotografía'}</h2>
+      {isBack ? (
+        <p>
+          Ahora déle la vuelta a su <strong>{view.signer.documentType}</strong> y tómele una foto a la <strong>cara de atrás</strong>{' '}
+          <strong>en este momento</strong>. Póngalo sobre una superficie plana, con buena luz. No se puede subir una foto guardada.
+        </p>
+      ) : isDocument ? (
         <p>
           Tómele una foto a su <strong>{view.signer.documentType}</strong> (la cara donde se ve su foto y su número) <strong>en este
           momento</strong>. Ponga el documento sobre una superficie plana, con buena luz. No se puede subir una foto guardada.
@@ -232,7 +238,7 @@ export function PhotoStep({
       {expired && <p className="error" role="alert">El código venció: pida otro y vuelva a tomar la foto.</p>}
 
       <button type="button" className="btn btn-block btn-link" onClick={() => { cam.stop(); onBack(); }}>
-        {!isDocument && view.policy.idPhotoRequired ? '← Volver a la foto del documento' : '← Volver al documento'}
+        {isBack ? '← Volver al frente del documento' : !isDocument && view.policy.idPhotoBackRequired ? '← Volver al reverso del documento' : !isDocument && view.policy.idPhotoRequired ? '← Volver a la foto del documento' : '← Volver al documento'}
       </button>
     </section>
   );

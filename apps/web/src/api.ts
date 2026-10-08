@@ -111,6 +111,7 @@ export interface Evidence {
   otp: { verifiedAt: string; attempts: number } | null;
   photo: { width: number; height: number; sha256: string; receivedAt: string | null; deletedAt: string | null } | null;
   idPhoto: { width: number; height: number; sha256: string; receivedAt: string | null; deletedAt: string | null } | null;
+  idPhotoBack: { width: number; height: number; sha256: string; receivedAt: string | null; deletedAt: string | null } | null;
   challenge: { code: string; issuedAt: string } | null;
   form: { powers?: string[]; observation?: string } | null;
   clauseText: string;
@@ -154,6 +155,7 @@ export interface TemplatePolicy {
   photoRequired: boolean;
   photoChallengeRequired: boolean;
   idPhotoRequired: boolean;
+  idPhotoBackRequired: boolean;
 }
 
 export interface TemplateVersionSummary {
@@ -236,6 +238,7 @@ export const api = {
   document: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/document`, key),
   photo: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/photo`, key),
   idPhoto: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/id-photo`, key),
+  idPhotoBack: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/id-photo-back`, key),
   templates: (key: string) => call<{ items: TemplateListItem[] }>('GET', '/v1/templates', key).then((r) => r.data.items),
   template: (key: string, type: string, version?: number) =>
     call<TemplateDetail>('GET', version ? `/v1/templates/${type}/versions/${version}` : `/v1/templates/${type}`, key).then((r) => r.data),

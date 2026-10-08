@@ -7,6 +7,7 @@ export function ReviewStep({
   form,
   photo,
   idPhoto,
+  idPhotoBack,
   busy,
   error,
   onBack,
@@ -16,6 +17,7 @@ export function ReviewStep({
   form: SignForm;
   photo: TakenPhoto | null;
   idPhoto: TakenPhoto | null;
+  idPhotoBack: TakenPhoto | null;
   busy: boolean;
   error: string | null;
   onBack: () => void;
@@ -50,6 +52,12 @@ export function ReviewStep({
         <div className="review-photo">
           <img src={idPhoto.url} alt="Foto de su documento" />
           <div className="muted small">Foto de su documento</div>
+        </div>
+      )}
+      {idPhotoBack && (
+        <div className="review-photo">
+          <img src={idPhotoBack.url} alt="Reverso de su documento" />
+          <div className="muted small">Reverso de su documento</div>
         </div>
       )}
       {photo && (

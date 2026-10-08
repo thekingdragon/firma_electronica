@@ -91,6 +91,7 @@ export function TemplateEditor() {
       p.photoChallengeRequired = false;
       p.idPhotoRequired = false;
     }
+    if (!p.idPhotoRequired) p.idPhotoBackRequired = false;
     set({ policy: p });
   };
 
@@ -226,7 +227,16 @@ export function TemplateEditor() {
             disabled={!draft.policy.photoRequired}
             onChange={(e) => setPolicy({ idPhotoRequired: e.target.checked })}
           />
-          <span>… y foto del documento de identidad</span>
+          <span>… y foto del documento de identidad (frente)</span>
+        </label>
+        <label className="check indent">
+          <input
+            type="checkbox"
+            checked={draft.policy.idPhotoBackRequired}
+            disabled={!draft.policy.idPhotoRequired}
+            onChange={(e) => setPolicy({ idPhotoBackRequired: e.target.checked })}
+          />
+          <span>… y también el reverso del documento</span>
         </label>
         <p className="hint">La revisión de las fotos la hace el personal de la corredora desde cada solicitud firmada.</p>
       </div>

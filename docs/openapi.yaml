@@ -270,6 +270,20 @@ paths:
             application/pdf:
               schema: { type: string, format: binary }
         '422': { description: VALIDATION_ERROR }
+  /v1/requests/{id}/id-photo-back:
+    get:
+      summary: Reverso del documento de identidad (bytes), para la revisión humana
+      description: |
+        Dato sensible. Misma regla que las otras fotos: 404 PHOTO_NOT_FOUND si el tipo no la exigió o es de otro
+        tenant; **410 PHOTO_PURGED** si se borró al vencer el plazo de retención.
+      security: [{ apiKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      responses:
+        '200':
+          description: La imagen (image/jpeg o image/png)
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
   /v1/requests/{id}/id-photo:
     get:
       summary: Fotografía del documento de identidad (bytes), para la revisión humana
@@ -404,7 +418,7 @@ paths:
     post:
       summary: Firmar
       description: |
-        `photo`, `idPhoto` y `challengeId` son obligatorios solo si la política del tipo lo exige.
+        `photo`, `idPhoto`, `idPhotoBack` y `challengeId` son obligatorios solo si la política del tipo lo exige.
       requestBody:
         required: true
         content:
@@ -414,7 +428,8 @@ paths:
               required: [accepted]
               properties:
                 photo: { type: string, format: binary }
-                idPhoto: { type: string, format: binary, description: Foto del documento de identidad, tomada en vivo. }
+                idPhoto: { type: string, format: binary, description: Foto del documento de identidad (frente), tomada en vivo. }
+                idPhotoBack: { type: string, format: binary, description: Foto del reverso del documento de identidad, tomada en vivo. }
                 challengeId:
                   type: string
                   format: uuid
@@ -527,7 +542,8 @@ components:
         signer: { type: object }
         otp: { type: object, nullable: true, description: "{ verifiedAt, attempts }; null si el tipo no exige OTP." }
         photo: { type: object, nullable: true, description: "{ width, height, sha256, receivedAt, deletedAt }; deletedAt si la retención la borró." }
-        idPhoto: { type: object, nullable: true, description: "Foto del documento de identidad; misma forma que photo." }
+        idPhoto: { type: object, nullable: true, description: "Foto del documento de identidad (frente); misma forma que photo." }
+        idPhotoBack: { type: object, nullable: true, description: "Foto del reverso del documento; misma forma que photo." }
         challenge: { type: object, nullable: true, description: "{ code, issuedAt }: el código que debía verse en el papel." }
         form: { type: object, description: Lo que el firmante marcó y escribió. }
         clauseText: { type: string, description: Texto exacto de la cláusula que aceptó. }
@@ -555,6 +571,7 @@ components:
             photoRequired: { type: boolean }
             photoChallengeRequired: { type: boolean }
             idPhotoRequired: { type: boolean }
+            idPhotoBackRequired: { type: boolean }
         expiresAt: { type: string, format: date-time }
     Block:
       type: object
@@ -605,6 +622,7 @@ components:
             photoRequired: { type: boolean }
             photoChallengeRequired: { type: boolean }
             idPhotoRequired: { type: boolean }
+            idPhotoBackRequired: { type: boolean }
         variables: { type: array, items: { type: object, properties: { name: { type: string }, label: { type: string } } } }
         versions: { type: array, items: { type: object } }
     PublishTemplate:
@@ -615,12 +633,13 @@ components:
         clauseText: { type: string }
         policy:
           type: object
-          required: [otpRequired, photoRequired, photoChallengeRequired, idPhotoRequired]
+          required: [otpRequired, photoRequired, photoChallengeRequired, idPhotoRequired, idPhotoBackRequired]
           properties:
             otpRequired: { type: boolean }
             photoRequired: { type: boolean }
             photoChallengeRequired: { type: boolean }
             idPhotoRequired: { type: boolean }
+            idPhotoBackRequired: { type: boolean }
         legalReviewed: { type: boolean, default: false }
         publishedBy: { type: string, description: Quién publica; queda registrado. }
     Verified:
@@ -661,6 +680,7 @@ components:
                       documentPath: { type: string, nullable: true, description: Ruta de la API para bajar el PDF con su clave. }
                       photoPath: { type: string, nullable: true, description: Ruta de la API para bajar la foto con su clave. }
                       idPhotoPath: { type: string, nullable: true, description: Ruta de la API para bajar la foto del documento de identidad. }
+                      idPhotoBackPath: { type: string, nullable: true, description: Ruta de la API para bajar el reverso del documento. }
                       review: { type: object, nullable: true }
         responses:
           '200': { description: Recibido }

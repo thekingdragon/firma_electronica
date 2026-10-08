@@ -19,6 +19,8 @@ export interface RenderInput {
     photo: { bytes: Buffer; type: 'jpeg' | 'png'; width: number; height: number; sha256: string } | null;
     /** Foto del documento de identidad; `undefined` si la plantilla no la pide. */
     idPhoto?: { bytes: Buffer; type: 'jpeg' | 'png'; width: number; height: number; sha256: string } | null;
+    /** Reverso del documento de identidad; `undefined` si la plantilla no lo pide. */
+    idPhotoBack?: { bytes: Buffer; type: 'jpeg' | 'png'; width: number; height: number; sha256: string } | null;
   };
 }
 

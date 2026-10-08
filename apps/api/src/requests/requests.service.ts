@@ -331,13 +331,13 @@ export class RequestsService {
   async getFile(
     tenant: Tenant,
     id: string,
-    kind: 'document' | 'photo' | 'idPhoto',
+    kind: 'document' | 'photo' | 'idPhoto' | 'idPhotoBack',
   ): Promise<{ bytes: Buffer; contentType: string; filename: string }> {
     const notFound = () => new ApiError(404, 'REQUEST_NOT_FOUND', 'Solicitud no encontrada.');
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw notFound();
 
-    const { rows } = await this.pool.query<{ status: RequestStatus; reference: string; pdf_path: string | null; photo_path: string | null; id_photo_path: string | null; photo_deleted_at: Date | null }>(
-      `SELECT r.status, r.reference, r.pdf_path, e.photo_path, e.id_photo_path, e.photo_deleted_at
+    const { rows } = await this.pool.query<{ status: RequestStatus; reference: string; pdf_path: string | null; photo_path: string | null; id_photo_path: string | null; id_back_path: string | null; photo_deleted_at: Date | null }>(
+      `SELECT r.status, r.reference, r.pdf_path, e.photo_path, e.id_photo_path, e.id_back_path, e.photo_deleted_at
          FROM signature_requests r
          LEFT JOIN signature_evidence e ON e.request_id = r.id
         WHERE r.tenant_id = $1 AND r.id = $2`,
@@ -353,14 +353,14 @@ export class RequestsService {
     if (row.photo_deleted_at) {
       throw new ApiError(410, 'PHOTO_PURGED', 'La fotografía se borró al vencer el plazo de retención. Quedan sus huellas (hash) en la evidencia.');
     }
-    const path = kind === 'idPhoto' ? row.id_photo_path : row.photo_path;
+    const path = kind === 'idPhoto' ? row.id_photo_path : kind === 'idPhotoBack' ? row.id_back_path : row.photo_path;
     if (!path) throw new ApiError(404, 'PHOTO_NOT_FOUND', 'Esta solicitud no tiene esa fotografía.');
     const bytes = await this.storage.get(path);
     const info = imageInfo(bytes);
     return {
       bytes,
       contentType: info?.mime ?? 'application/octet-stream',
-      filename: `${row.reference}-${kind === 'idPhoto' ? 'documento' : 'foto'}.${info?.type === 'png' ? 'png' : 'jpg'}`,
+      filename: `${row.reference}-${kind === 'idPhoto' ? 'documento' : kind === 'idPhotoBack' ? 'documento-reverso' : 'foto'}.${info?.type === 'png' ? 'png' : 'jpg'}`,
     };
   }
 

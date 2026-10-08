@@ -14,6 +14,8 @@ export interface TemplateSeed {
   photoChallengeRequired: boolean;
   /** Segunda foto, la del documento de identidad (exige photoRequired). */
   idPhotoRequired: boolean;
+  /** Reverso del documento de identidad (exige idPhotoRequired). */
+  idPhotoBackRequired: boolean;
 }
 
 // Facultades del art. 32.1 de la Res. SBS 809-2019 (Anexo I, modelo de carta de nombramiento).
@@ -76,6 +78,7 @@ export function defaultTemplates(): TemplateSeed[] {
       photoRequired: true,
       photoChallengeRequired: true,
       idPhotoRequired: true,
+      idPhotoBackRequired: true,
     },
   ];
 }

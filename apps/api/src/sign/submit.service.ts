@@ -16,6 +16,7 @@ import { createHash } from 'node:crypto';
 export interface SubmitInput {
   photo: Buffer | undefined;
   idPhoto: Buffer | undefined;
+  idPhotoBack: Buffer | undefined;
   challengeId: string | undefined;
   accepted: unknown;
   form: unknown;
@@ -142,7 +143,11 @@ export class SubmitService implements OnApplicationShutdown {
       throw new ApiError(422, 'ID_PHOTO_REQUIRED', 'Falta la fotografía de su documento de identidad.');
     }
     const photo = input.photo ? this.checkedImage(input.photo, 'PHOTO') : null;
+    if (link.id_photo_back_required && !input.idPhotoBack) {
+      throw new ApiError(422, 'ID_PHOTO_BACK_REQUIRED', 'Falta la fotografía del reverso de su documento de identidad.');
+    }
     const idPhoto = input.idPhoto ? this.checkedImage(input.idPhoto, 'ID_PHOTO') : null;
+    const idPhotoBack = input.idPhotoBack ? this.checkedImage(input.idPhotoBack, 'ID_PHOTO_BACK') : null;
     if (link.photo_challenge_required && (!input.challengeId || !UUID.test(input.challengeId))) {
       throw new ApiError(409, 'CHALLENGE_INVALID', 'Falta el código de la foto. Pida uno nuevo y vuelva a tomarla.');
     }
@@ -206,6 +211,7 @@ export class SubmitService implements OnApplicationShutdown {
             challengeCode: challenge?.code ?? null,
             photo,
             idPhoto,
+            idPhotoBack,
           },
         }),
       );
@@ -215,6 +221,7 @@ export class SubmitService implements OnApplicationShutdown {
       const pdfPath = `${base}/document.bin`;
       const photoPath = photo ? `${base}/photo.bin` : null;
       const idPhotoPath = idPhoto ? `${base}/id-photo.bin` : null;
+      const idBackPath = idPhotoBack ? `${base}/id-photo-back.bin` : null;
       await this.storage.put(pdfPath, pdf);
       written.push(pdfPath);
       if (photo && photoPath) {
@@ -224,6 +231,10 @@ export class SubmitService implements OnApplicationShutdown {
       if (idPhoto && idPhotoPath) {
         await this.storage.put(idPhotoPath, idPhoto.bytes);
         written.push(idPhotoPath);
+      }
+      if (idPhotoBack && idBackPath) {
+        await this.storage.put(idBackPath, idPhotoBack.bytes);
+        written.push(idBackPath);
       }
 
       const upd = await client.query(
@@ -237,8 +248,9 @@ export class SubmitService implements OnApplicationShutdown {
         `INSERT INTO signature_evidence
            (request_id, otp_verified_at, otp_attempts, challenge_id, photo_received_at, photo_path, photo_sha256,
             photo_width, photo_height, form_json, clause_text, ip, user_agent, client_info, captured_at,
-            id_photo_received_at, id_photo_path, id_photo_sha256, id_photo_width, id_photo_height)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
+            id_photo_received_at, id_photo_path, id_photo_sha256, id_photo_width, id_photo_height,
+            id_back_received_at, id_back_path, id_back_sha256, id_back_width, id_back_height)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)`,
         [
           link.id,
           otpEvidence?.verifiedAt ?? null,
@@ -260,6 +272,11 @@ export class SubmitService implements OnApplicationShutdown {
           idPhoto?.sha256 ?? null,
           idPhoto?.width ?? null,
           idPhoto?.height ?? null,
+          idPhotoBack ? signedAt : null,
+          idBackPath,
+          idPhotoBack?.sha256 ?? null,
+          idPhotoBack?.width ?? null,
+          idPhotoBack?.height ?? null,
         ],
       );
       if (challenge) await client.query('UPDATE photo_challenges SET consumed_at = now() WHERE id = $1', [challenge.id]);
@@ -292,11 +309,11 @@ export class SubmitService implements OnApplicationShutdown {
   /** Valida una imagen recibida (JPEG/PNG real, resolución mínima) y calcula su huella. */
   private checkedImage(
     bytes: Buffer,
-    prefix: 'PHOTO' | 'ID_PHOTO',
+    prefix: 'PHOTO' | 'ID_PHOTO' | 'ID_PHOTO_BACK',
   ): { bytes: Buffer; type: 'jpeg' | 'png'; width: number; height: number; sha256: string } {
     const info = imageInfo(bytes);
     if (!info) throw new ApiError(422, `${prefix}_INVALID`, 'El archivo no es una imagen JPEG o PNG válida.');
-    const tooSmall = checkResolution(info, prefix === 'ID_PHOTO' ? 'id' : 'selfie');
+    const tooSmall = checkResolution(info, prefix === 'PHOTO' ? 'selfie' : 'id');
     if (tooSmall) throw new ApiError(422, `${prefix}_TOO_SMALL`, tooSmall);
     return { bytes, type: info.type, width: info.width, height: info.height, sha256: createHash('sha256').update(bytes).digest('hex') };
   }

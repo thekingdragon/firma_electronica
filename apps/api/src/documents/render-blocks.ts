@@ -155,6 +155,15 @@ export const renderBlocksDocument: DocumentRenderer = async (input: RenderInput)
     f.image(img, 170, 130);
   }
 
+  if (input.evidence.idPhotoBack) {
+    const ib = input.evidence.idPhotoBack;
+    f.field('Fotografía del reverso del documento de identidad:', `${ib.width}×${ib.height} px · SHA-256 ${ib.sha256}`);
+    f.gap(4);
+    const bytes = new Uint8Array(ib.bytes);
+    const img = ib.type === 'png' ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
+    f.image(img, 170, 130);
+  }
+
   f.footers(`${input.reference}  ·  Documento firmado electrónicamente`);
   return doc.save();
 };

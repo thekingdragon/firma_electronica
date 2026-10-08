@@ -29,6 +29,7 @@ export interface EvidenceView {
   otp: { verifiedAt: string; attempts: number } | null;
   photo: { width: number; height: number; sha256: string; receivedAt: string | null; deletedAt: string | null } | null;
   idPhoto: { width: number; height: number; sha256: string; receivedAt: string | null; deletedAt: string | null } | null;
+  idPhotoBack: { width: number; height: number; sha256: string; receivedAt: string | null; deletedAt: string | null } | null;
   challenge: { code: string; issuedAt: string } | null;
   form: unknown;
   clauseText: string;
@@ -93,7 +94,7 @@ export class RequestActionsService {
       `SELECT r.id, r.reference, r.status, r.signed_at, r.pdf_sha256, r.snapshot,
               e.otp_verified_at, e.otp_attempts, e.photo_width, e.photo_height, e.photo_sha256, e.photo_received_at,
               e.photo_deleted_at, e.photo_path, e.id_photo_width, e.id_photo_height, e.id_photo_sha256,
-              e.id_photo_received_at, c.code AS challenge_code, c.issued_at AS challenge_issued_at,
+              e.id_photo_received_at, e.id_back_width, e.id_back_height, e.id_back_sha256, e.id_back_received_at, c.code AS challenge_code, c.issued_at AS challenge_issued_at,
               e.form_json, e.clause_text, e.ip::text AS ip, e.user_agent, e.client_info,
               e.review_result, e.reviewed_by, e.review_note, e.reviewed_at
          FROM signature_requests r
@@ -127,6 +128,9 @@ export class RequestActionsService {
         : null,
       idPhoto: r.id_photo_sha256
         ? { width: r.id_photo_width, height: r.id_photo_height, sha256: r.id_photo_sha256, receivedAt: iso(r.id_photo_received_at), deletedAt: iso(r.photo_deleted_at) }
+        : null,
+      idPhotoBack: r.id_back_sha256
+        ? { width: r.id_back_width, height: r.id_back_height, sha256: r.id_back_sha256, receivedAt: iso(r.id_back_received_at), deletedAt: iso(r.photo_deleted_at) }
         : null,
       challenge: r.challenge_code ? { code: r.challenge_code, issuedAt: iso(r.challenge_issued_at) as string } : null,
       form: r.form_json,

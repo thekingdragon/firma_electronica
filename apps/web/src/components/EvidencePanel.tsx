@@ -162,7 +162,7 @@ export function EvidencePanel({
             />
           </div>
           <div>
-            <p className="checklist-title">Documento de identidad</p>
+            <p className="checklist-title">Documento de identidad (frente)</p>
             <EvidencePhoto
               info={ev.idPhoto}
               fetchPhoto={() => api.idPhoto(apiKey, requestId)}
@@ -170,6 +170,17 @@ export function EvidencePanel({
               emptyMessage="Esta firma no tiene foto del documento: se hizo antes de que se pidiera."
             />
           </div>
+          {ev.idPhotoBack && (
+            <div>
+              <p className="checklist-title">Documento de identidad (reverso)</p>
+              <EvidencePhoto
+                info={ev.idPhotoBack}
+                fetchPhoto={() => api.idPhotoBack(apiKey, requestId)}
+                alt={`Reverso del documento de identidad de ${signerName}`}
+                emptyMessage="No hay foto del reverso."
+              />
+            </div>
+          )}
         </div>
         <div className="review-check">
           <div>
@@ -230,6 +241,16 @@ export function EvidencePanel({
                 {ev.idPhoto.width}×{ev.idPhoto.height} px{ev.idPhoto.receivedAt ? `, recibida el ${formatDateTimeSeconds(ev.idPhoto.receivedAt)}` : ''}
                 <br />
                 <code className="hash">{ev.idPhoto.sha256}</code>
+              </dd>
+            </>
+          )}
+          {ev.idPhotoBack && (
+            <>
+              <dt>Reverso del documento</dt>
+              <dd>
+                {ev.idPhotoBack.width}×{ev.idPhotoBack.height} px{ev.idPhotoBack.receivedAt ? `, recibida el ${formatDateTimeSeconds(ev.idPhotoBack.receivedAt)}` : ''}
+                <br />
+                <code className="hash">{ev.idPhotoBack.sha256}</code>
               </dd>
             </>
           )}

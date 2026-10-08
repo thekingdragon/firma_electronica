@@ -21,6 +21,7 @@ const URL = testDatabaseUrl();
 const SECRETS_KEY = randomBytes(32);
 const sha = (b: Buffer | Uint8Array) => createHash('sha256').update(b).digest('hex');
 const FOTO = makePng(1280, 720);
+const FOTO_REVERSO = makePng(1280, 722); // distinta de las otras dos
 const FOTO_DOC = makePng(1280, 721); // distinta de FOTO: así se distingue cuál es cuál
 
 const body = (email = 'ana@example.com', withOtp = true) => ({
@@ -84,7 +85,7 @@ describe('firma: foto, envío y evidencia', () => {
   /** Envía la firma. Cada opción puede sobreescribirse o quitarse para probar un caso. */
   function enviar(
     s: { token: string; session: string; a: INestApplication },
-    o: { photo?: Buffer | null; idPhoto?: Buffer | null; challengeId?: string | null; accepted?: string | null; form?: unknown; session?: string | null; clientInfo?: unknown } = {},
+    o: { photo?: Buffer | null; idPhoto?: Buffer | null; idPhotoBack?: Buffer | null; challengeId?: string | null; accepted?: string | null; form?: unknown; session?: string | null; clientInfo?: unknown } = {},
   ) {
     const r = http(s.a).post(`/v1/sign/${s.token}/submit`);
     const session = o.session === undefined ? s.session : o.session;
@@ -96,6 +97,7 @@ describe('firma: foto, envío y evidencia', () => {
     if (o.challengeId) r.field('challengeId', o.challengeId);
     if (o.photo !== null) r.attach('photo', o.photo ?? FOTO, { filename: 'foto.png', contentType: 'image/png' });
     if (o.idPhoto !== null) r.attach('idPhoto', o.idPhoto ?? FOTO_DOC, { filename: 'documento.png', contentType: 'image/png' });
+    if (o.idPhotoBack !== null) r.attach('idPhotoBack', o.idPhotoBack ?? FOTO_REVERSO, { filename: 'reverso.png', contentType: 'image/png' });
     return r;
   }
 
@@ -117,10 +119,10 @@ describe('firma: foto, envío y evidencia', () => {
 
     const sinFotoId = await mkTenant('Sin foto');
     await saveMailSettings(pool, SECRETS_KEY, sinFotoId, { host: '127.0.0.1', port: smtp.port, fromEmail: 'no-responder@corredora.test' });
-    await pool.query(`UPDATE document_templates SET photo_required=false, photo_challenge_required=false, id_photo_required=false WHERE tenant_id=$1`, [sinFotoId]);
+    await pool.query(`UPDATE document_templates SET photo_required=false, photo_challenge_required=false, id_photo_required=false, id_photo_back_required=false WHERE tenant_id=$1`, [sinFotoId]);
 
     const sinOtpId = await mkTenant('Sin otp');
-    await pool.query(`UPDATE document_templates SET otp_required=false, photo_required=false, photo_challenge_required=false, id_photo_required=false WHERE tenant_id=$1`, [sinOtpId]);
+    await pool.query(`UPDATE document_templates SET otp_required=false, photo_required=false, photo_challenge_required=false, id_photo_required=false, id_photo_back_required=false WHERE tenant_id=$1`, [sinOtpId]);
 
     await mkTenant('Otro');
 
@@ -215,6 +217,7 @@ describe('firma: foto, envío y evidencia', () => {
         await pool.query(
           `SELECT otp_verified_at, otp_attempts, challenge_id, photo_received_at, photo_path, photo_sha256,
                   id_photo_received_at, id_photo_path, id_photo_sha256, id_photo_width, id_photo_height,
+                  id_back_received_at, id_back_path, id_back_sha256, id_back_width, id_back_height,
                   photo_width, photo_height, form_json, clause_text, ip::text AS ip, user_agent, client_info
              FROM signature_evidence WHERE request_id=$1`,
           [id],
@@ -242,6 +245,14 @@ describe('firma: foto, envío y evidencia', () => {
       expect(ev.id_photo_path).not.toBe(ev.photo_path);
       expect((await readFile(join(storageDir, ev.id_photo_path))).includes(FOTO_DOC.subarray(0, 64))).toBe(false);
       expect((await storage.get(ev.id_photo_path)).equals(FOTO_DOC)).toBe(true);
+
+      // El reverso: su propia huella, su propio archivo, cifrado y distinto de las otras fotos.
+      expect(ev.id_back_sha256).toBe(sha(FOTO_REVERSO));
+      expect([ev.id_back_width, ev.id_back_height]).toEqual([1280, 722]);
+      expect(ev.id_back_received_at).not.toBeNull();
+      expect(new Set([ev.photo_path, ev.id_photo_path, ev.id_back_path]).size).toBe(3);
+      expect((await readFile(join(storageDir, ev.id_back_path))).includes(FOTO_REVERSO.subarray(0, 64))).toBe(false);
+      expect((await storage.get(ev.id_back_path)).equals(FOTO_REVERSO)).toBe(true);
 
       // El desafío quedó consumido y la bitácora tiene la firma.
       expect((await pool.query('SELECT consumed_at FROM photo_challenges WHERE id=$1', [d.challengeId])).rows[0].consumed_at).not.toBeNull();
@@ -390,6 +401,27 @@ describe('firma: foto, envío y evidencia', () => {
       await sinCambios(s.id);
     });
 
+    it('sin el reverso del documento cuando la plantilla lo pide: 422 y no se guarda nada', async () => {
+      const s = await conSesion();
+      const d = await desafio(s);
+      const r = await enviar(s, { challengeId: d.challengeId, idPhotoBack: null });
+      expect(r.status).toBe(422);
+      expect(r.body.code).toBe('ID_PHOTO_BACK_REQUIRED');
+      await sinCambios(s.id);
+    });
+
+    it('el reverso también se valida: no es imagen o es muy pequeño', async () => {
+      const s = await conSesion();
+      const d = await desafio(s);
+      const falsa = await enviar(s, { challengeId: d.challengeId, idPhotoBack: Buffer.from('<script>alert(1)</script>'.repeat(200)) });
+      expect(falsa.status).toBe(422);
+      expect(falsa.body.code).toBe('ID_PHOTO_BACK_INVALID');
+      const chica = await enviar(s, { challengeId: d.challengeId, idPhotoBack: makePng(640, 480) });
+      expect(chica.status).toBe(422);
+      expect(chica.body.code).toBe('ID_PHOTO_BACK_TOO_SMALL');
+      await sinCambios(s.id);
+    });
+
     it('la foto del documento también se valida: no es imagen o es muy pequeña', async () => {
       const s = await conSesion();
       const d = await desafio(s);
@@ -511,7 +543,7 @@ describe('firma: foto, envío y evidencia', () => {
       expect([a.status, b.status].sort()).toEqual([200, 410]);
       expect((await pool.query('SELECT 1 FROM signature_evidence WHERE request_id=$1', [s.id])).rowCount).toBe(1);
       const files = await readdir(join(storageDir, tenants['Firma'].id, s.id));
-      expect(files.sort()).toEqual(['document.bin', 'id-photo.bin', 'photo.bin']);
+      expect(files.sort()).toEqual(['document.bin', 'id-photo-back.bin', 'id-photo.bin', 'photo.bin']);
     });
 
     it('si revocan la solicitud mientras el firmante está en la pantalla, no puede firmar', async () => {
@@ -580,11 +612,16 @@ describe('firma: foto, envío y evidencia', () => {
       const doc = await http().get(`/v1/requests/${f.id}/id-photo`).set('X-Api-Key', tenants['Firma'].key);
       expect(doc.status).toBe(200);
       expect(Buffer.from(doc.body).equals(FOTO_DOC)).toBe(true);
+
+      // El reverso se baja por su propia ruta.
+      const rev = await http().get(`/v1/requests/${f.id}/id-photo-back`).set('X-Api-Key', tenants['Firma'].key);
+      expect(rev.status).toBe(200);
+      expect(Buffer.from(rev.body).equals(FOTO_REVERSO)).toBe(true);
     });
 
     it('otro tenant no puede descargar nada de esa solicitud (404, igual que una inexistente)', async () => {
       const f = await firmar();
-      for (const kind of ['document', 'photo', 'id-photo']) {
+      for (const kind of ['document', 'photo', 'id-photo', 'id-photo-back']) {
         const r = await http().get(`/v1/requests/${f.id}/${kind}`).set('X-Api-Key', tenants['Otro'].key);
         expect(r.status).toBe(404);
         expect(r.body.code).toBe('REQUEST_NOT_FOUND');

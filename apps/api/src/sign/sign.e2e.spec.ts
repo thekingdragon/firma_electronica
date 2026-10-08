@@ -325,7 +325,7 @@ describe('flujo público de firma', () => {
       expect(anexo.text).toContain('Obligaciones del corredor de seguros');
       expect(v.clause.text).toContain('BORRADOR');
       expect(v.clause.version).toBe(1);
-      expect(v.policy).toEqual({ photoRequired: true, photoChallengeRequired: true, idPhotoRequired: true });
+      expect(v.policy).toEqual({ photoRequired: true, photoChallengeRequired: true, idPhotoRequired: true, idPhotoBackRequired: true });
       expect(v.issuer.legalName).toBe('Con correo Corredores SAC');
 
       const ev = await pool.query(`SELECT event FROM access_log WHERE request_id=$1 ORDER BY id`, [id]);

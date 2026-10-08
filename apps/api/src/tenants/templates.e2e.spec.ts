@@ -37,7 +37,7 @@ describe('publicar una versión de la plantilla', () => {
     const t = await createTenant(pool, { name: 'T', country: 'PE', legalName: 'T SAC' });
     key = t.apiKey;
     tenantId = t.tenant.id;
-    await pool.query(`UPDATE document_templates SET otp_required=false, photo_required=false, photo_challenge_required=false, id_photo_required=false WHERE tenant_id=$1`, [tenantId]);
+    await pool.query(`UPDATE document_templates SET otp_required=false, photo_required=false, photo_challenge_required=false, id_photo_required=false, id_photo_back_required=false WHERE tenant_id=$1`, [tenantId]);
     storageDir = await mkdtemp(join(tmpdir(), 'fes-tpl-'));
     app = await makeApp({
       DATABASE_URL: URL_DB,

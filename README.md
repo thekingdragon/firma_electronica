@@ -31,7 +31,8 @@ definitivo (`template:publish`), ninguna firma hecha con este servicio debe dars
 - Crear solicitudes por **API** o desde el **panel**; enviar el enlace por el host (copiar o WhatsApp) o
   **por correo desde el servicio**.
 - Verificación por **OTP por correo** (SMTP propio de cada corredora), con tope de intentos.
-- **Dos fotos en vivo** (sin subir archivos): el **documento de identidad** y una **selfie** con un **código aleatorio** escrito en un papel. Son políticas de la plantilla (`--id-photo`, `--photo`).
+- **Fotos en vivo** (sin subir archivos): el **documento de identidad** (frente y reverso) y una **selfie** con un **código aleatorio**
+  escrito en un papel. Cada una es una política de la plantilla, configurable desde el panel.
 - **PDF firmado** con constancia (foto, hash, IP, hora), **cifrado en disco**; copia al firmante por correo.
 - **Revisión humana** de la identidad en el panel; **revocar**; **vencimiento** automático.
 - **Webhooks** firmados al host (`signature.signed|reviewed|revoked|expired`), con reintentos.
