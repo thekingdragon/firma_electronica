@@ -320,7 +320,7 @@ describe('flujo público de firma', () => {
       expect(facultades.intro).toContain('facultados');
       expect(bloques.find((b) => b.type === 'destinatario' || (b.type === 'paragraph' && String(b.text).includes('Señores')))?.text).toContain('Con correo Corredores SAC');
       const seguros = bloques.find((b) => b.type === 'list' && b.style === 'letters') as unknown as { items: string[] };
-      expect(seguros.items).toEqual(['SCTR Salud', 'SCTR Pensión']);
+      expect(seguros.items).toEqual(['**SCTR Salud**', '**SCTR Pensión**']);
       const anexo = bloques.find((b) => b.type === 'annex') as unknown as { text: string };
       expect(anexo.text).toContain('Obligaciones del corredor de seguros');
       expect(v.clause.text).toContain('BORRADOR');

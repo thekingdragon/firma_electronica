@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Rich } from '../components/Rich';
 import { powersOf, type SigningView, type ViewBlock } from './signApi';
 
 export interface SignForm {
@@ -74,13 +75,13 @@ export function DocumentStep({
           </div>
         );
       case 'title':
-        return <h2 key={b.id} className="letter-title">{b.text}</h2>;
+        return <h2 key={b.id} className="letter-title"><Rich text={b.text} /></h2>;
       case 'heading':
-        return <h3 key={b.id} className="letter-heading">{b.text}</h3>;
+        return <h3 key={b.id} className="letter-heading"><Rich text={b.text} /></h3>;
       case 'paragraph':
         return (
           <p key={b.id} className={`block-par${b.small ? ' muted small' : ''}`} style={{ textAlign: b.align, fontWeight: b.bold ? 700 : undefined }}>
-            {b.text}
+            <Rich text={b.text} />
           </p>
         );
       case 'list':
@@ -88,7 +89,7 @@ export function DocumentStep({
           return (
             <ol key={b.id} className="insurances" type="A">
               {b.items.map((s, i) => (
-                <li key={i}>{s}</li>
+                <li key={i}><Rich text={s} /></li>
               ))}
             </ol>
           );
@@ -96,7 +97,7 @@ export function DocumentStep({
         return (
           <ul key={b.id} className={b.style === 'check' ? 'check-list' : 'bullet-list'}>
             {b.items.map((s, i) => (
-              <li key={i}>{s}</li>
+              <li key={i}><Rich text={s} /></li>
             ))}
           </ul>
         );
@@ -104,14 +105,14 @@ export function DocumentStep({
         const maxLen = b.observation.maxLength;
         return (
           <div key={b.id}>
-            {b.intro && <p className="block-par">{b.intro}</p>}
+            {b.intro && <p className="block-par"><Rich text={b.intro} /></p>}
             {b.items.length > 0 && (
               <fieldset className={`powers${shown.powers ? ' invalid' : ''}`}>
                 <legend className="sr-only">Facultades</legend>
                 {b.items.map((p) => (
                   <label key={p.code} className="check">
                     <input type="checkbox" checked={form.powers.includes(p.code)} onChange={() => toggle(p.code)} />
-                    <span>{p.text}</span>
+                    <span><Rich text={p.text} /></span>
                   </label>
                 ))}
               </fieldset>
@@ -151,7 +152,7 @@ export function DocumentStep({
                 }}
               />
               <span>
-                {b.text}
+                <Rich text={b.text} />
                 {b.required ? '' : ' (opcional)'}
               </span>
             </label>
@@ -163,8 +164,8 @@ export function DocumentStep({
         return (
           <div key={b.id} className="signer-box">
             <strong>{b.title}</strong>
-            <div>Nombre: {b.name}</div>
-            <div>Documento: {b.document}</div>
+            <div>Nombre: <strong>{b.name}</strong></div>
+            <div>Documento: <strong>{b.document}</strong></div>
           </div>
         );
       case 'signatureStamp':
@@ -176,7 +177,7 @@ export function DocumentStep({
           <details key={b.id} className="annex">
             <summary>{b.title} (léalo antes de firmar)</summary>
             {b.subtitle && <p className="muted small">{b.subtitle}</p>}
-            <div className="annex-text">{b.text}</div>
+            <div className="annex-text"><Rich text={b.text} /></div>
           </details>
         );
       case 'pageBreak':

@@ -180,7 +180,11 @@ export function TemplateEditor() {
       )}
 
       <details className="card vars">
-        <summary>Variables que puede usar en los textos</summary>
+        <summary>Variables y negrita en los textos</summary>
+        <p className="hint">
+          Para poner algo en <strong>negrita</strong>, enciérrelo entre dos asteriscos: <code>**así**</code>. Funciona en cualquier texto, también
+          alrededor de una variable: <code>**{'{{signer.name}}'}**</code>.
+        </p>
         <ul>
           {detail.variables.map((v) => (
             <li key={v.name}>

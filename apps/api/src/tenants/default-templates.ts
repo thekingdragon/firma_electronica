@@ -2,6 +2,7 @@
  * Plantillas de partida que se le crean a un tenant nuevo. Son un punto de partida editable: el
  * tenant puede crear una versión nueva; una versión usada no se edita (ver document_templates).
  */
+import { DEFAULT_LETTER_TEXTS } from '../documents/appointment-letter-texts';
 import { blocksFromLegacy, type Block } from '../documents/blocks';
 
 export interface TemplateSeed {
@@ -56,11 +57,11 @@ El contratante, asegurado y/o beneficiario puede solicitar la cobertura de esta 
 // con su domicilio y su correo de contacto; el texto definitivo es materia de la revisión legal.
 const CONSENTIMIENTO_DATOS =
   'En cumplimiento de la Ley N.º 29733, Ley de Protección de Datos Personales, y su reglamento, autorizo, de manera ' +
-  'libre, previa, expresa e informada, que {{broker.legalName}} trate y almacene mis datos personales en medios ' +
+  'libre, previa, expresa e informada, que **{{broker.legalName}}** trate y almacene mis datos personales en medios ' +
   'digitales, con la finalidad de brindarme asesoría en seguros, gestionar cotizaciones, emitir pólizas, atender ' +
   'siniestros y mantener comunicación relacionada con sus servicios. Declaro haber sido informado de que puedo ejercer ' +
   'mis derechos de acceso, rectificación, cancelación y oposición, así como solicitar copia de la información que se ' +
-  'mantiene sobre mí, en cualquier momento y de forma gratuita, mediante comunicación dirigida a {{broker.legalName}}. ' +
+  'mantiene sobre mí, en cualquier momento y de forma gratuita, mediante comunicación dirigida a **{{broker.legalName}}**. ' +
   '[BORRADOR: texto sujeto a revisión legal]';
 
 // Textos basados en cartas de nombramiento reales (se descartó todo lo de responsabilidad civil y reclamos). Se
@@ -95,14 +96,25 @@ function carta(): Block[] {
   // Se arma en el orden de la carta: lo propio de cada bloque va justo después del que le corresponde.
   // La carta la escribe el cliente (primera persona): abre con SUS datos y la fecha, no con un membrete de la corredora.
   const out: Block[] = [
-    par('cliente', 'Nombres y apellidos: {{signer.name}}\n{{signer.documentType}}: {{signer.documentNumber}}'),
+    par('cliente', 'Nombres y apellidos: **{{signer.name}}**\n{{signer.documentType}}: **{{signer.documentNumber}}**'),
     par('fecha', '{{date}}'),
   ];
   for (let b of base) {
     if (b.type === 'issuerHeader') continue;
     // «Señores: / CORREDORES DE SEGUROS / <razón social> / Presente.-» repetía el giro: la razón social ya lo incluye.
-    if (b.id === 'destinatario' && b.type === 'paragraph') b = { ...b, text: 'Señores:\n{{broker.legalName}}\nPresente.-' };
+    if (b.id === 'destinatario' && b.type === 'paragraph') b = { ...b, text: 'Señores:\n**{{broker.legalName}}**\nPresente.-' };
     // «Estimados señores:» repetía «Señores:» a una línea de distancia. El saludo habitual de una carta formal es otro.
+    // El cuerpo oficial de la SBS, precedido de quién escribe: los datos esenciales del firmante, en negrita.
+    if (b.id === 'cuerpo' && b.type === 'paragraph') {
+      const oficial = DEFAULT_LETTER_TEXTS.body;
+      b = {
+        ...b,
+        text:
+          'Yo, **{{signer.name}}**, identificado(a) con **{{signer.documentType}} N.º {{signer.documentNumber}}**, ' +
+          oficial.charAt(0).toLowerCase() +
+          oficial.slice(1),
+      };
+    }
     if (b.id === 'saludo' && b.type === 'paragraph') b = { ...b, text: 'De mi consideración:' };
     if (b.id === 'cierre') {
       // Los consentimientos van antes del cierre («Atentamente»), cada uno con su casilla.

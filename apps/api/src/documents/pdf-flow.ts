@@ -1,4 +1,5 @@
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from 'pdf-lib';
+import { parseInline, type Piece } from './inline';
 
 const A4: [number, number] = [595.28, 841.89];
 const MARGIN = 56;
@@ -106,10 +107,115 @@ export class PdfFlow {
     return this.wrap(text, this.fontFor(bold), size, this.width - indent);
   }
 
+  /**
+   * Reparte un texto con tramos en negrita (`**así**`) en líneas de un ancho dado. Cada línea es una lista de tramos
+   * ya medidos. Las palabras no se parten entre líneas (salvo una más ancha que la línea, que se corta por caracteres);
+   * el salto de línea del texto se respeta; una negrita que cruza un salto sigue en la línea de abajo.
+   */
+  private layoutRich(text: string, size: number, maxWidth: number, baseBold: boolean): Array<Array<Piece & { width: number }>> {
+    const widthOf = (t: string, bold: boolean) => this.fontFor(bold).widthOfTextAtSize(t, size);
+    // 1) Líneas duras: se corta en cada salto de línea, conservando la negrita de cada tramo.
+    const hard: Piece[][] = [[]];
+    for (const p of parseInline(text)) {
+      const parts = p.text.split(/\r?\n/);
+      parts.forEach((part, i) => {
+        if (i > 0) hard.push([]);
+        if (part) hard[hard.length - 1].push({ text: this.safe(part), bold: baseBold || p.bold });
+      });
+    }
+    const out: Array<Array<Piece & { width: number }>> = [];
+    for (const hl of hard) {
+      if (hl.length === 0) {
+        out.push([]);
+        continue;
+      }
+      // 2) Palabras: una palabra puede estar formada por tramos pegados («**N.º 123**.» son dos tramos y una palabra).
+      const words: Piece[][] = [];
+      let cur: Piece[] = [];
+      for (const p of hl) {
+        for (const chunk of p.text.split(/(\s+)/)) {
+          if (chunk === '') continue;
+          if (/^\s+$/.test(chunk)) {
+            if (cur.length) words.push(cur);
+            cur = [];
+          } else cur.push({ text: chunk, bold: p.bold });
+        }
+      }
+      if (cur.length) words.push(cur);
+      // 3) Se acomodan en líneas.
+      let line: Array<Piece & { width: number }> = [];
+      let lineWidth = 0;
+      const space = widthOf(' ', false);
+      const flush = () => {
+        out.push(line);
+        line = [];
+        lineWidth = 0;
+      };
+      for (const word of words) {
+        const ww = word.reduce((acc, p) => acc + widthOf(p.text, p.bold), 0);
+        const needed = (line.length ? space : 0) + ww;
+        if (line.length && lineWidth + needed > maxWidth) flush();
+        if (ww > maxWidth) {
+          // Una «palabra» más ancha que la línea (p. ej. un hash) se corta por caracteres.
+          for (const p of word) {
+            let rest = p.text;
+            while (rest) {
+              let n = rest.length;
+              while (n > 1 && lineWidth + widthOf(rest.slice(0, n), p.bold) > maxWidth) n--;
+              if (lineWidth + widthOf(rest.slice(0, n), p.bold) > maxWidth && line.length) {
+                flush();
+                continue;
+              }
+              const piece = rest.slice(0, n);
+              line.push({ text: piece, bold: p.bold, width: widthOf(piece, p.bold) });
+              lineWidth += widthOf(piece, p.bold);
+              rest = rest.slice(n);
+              if (rest) flush();
+            }
+          }
+          continue;
+        }
+        if (line.length) {
+          line.push({ text: ' ', bold: false, width: space });
+          lineWidth += space;
+        }
+        for (const p of word) {
+          const w = widthOf(p.text, p.bold);
+          line.push({ text: p.text, bold: p.bold, width: w });
+          lineWidth += w;
+        }
+      }
+      flush();
+    }
+    return out;
+  }
+
+  private drawRichLine(line: Array<Piece & { width: number }>, x0: number, size: number, color: 'ink' | 'muted'): void {
+    let x = x0;
+    for (const p of line) {
+      if (p.text.trim() !== '' || p.text === ' ') {
+        if (p.text.trim() !== '') this.page.drawText(p.text, { x, y: this.y + size * 0.28, size, font: this.fontFor(p.bold), color: color === 'muted' ? MUTED : INK });
+      }
+      x += p.width;
+    }
+  }
+
   paragraph(text: string, opts: TextOptions = {}): void {
     const { size = 10, bold = false, indent = 0, after = 6, align = 'left', color = 'ink' } = opts;
-    const font = this.fontFor(bold);
     const lineHeight = size * 1.35;
+    if (text.includes('**')) {
+      // Con negrita dentro del texto: se maqueta por tramos.
+      for (const line of this.layoutRich(text, size, this.width - indent, bold)) {
+        this.need(lineHeight);
+        const w = line.reduce((acc, p) => acc + p.width, 0);
+        const x = MARGIN + indent + (align === 'center' ? (this.width - indent - w) / 2 : align === 'right' ? this.width - indent - w : 0);
+        this.y -= lineHeight;
+        this.drawRichLine(line, x, size, color);
+      }
+      this.y -= after;
+      return;
+    }
+    const font = this.fontFor(bold);
     const lines = this.wrap(text, font, size, this.width - indent);
     for (const line of lines) {
       this.need(lineHeight);
@@ -142,7 +248,7 @@ export class PdfFlow {
     const { size = 10, indent = 0, after = 4 } = opts;
     const box = size;
     const textIndent = indent + box + 8;
-    const lines = this.wrap(text, this.regular, size, this.width - textIndent);
+    const lines = this.layoutRich(text, size, this.width - textIndent, false);
     const lineHeight = size * 1.35;
     this.need(lineHeight * Math.min(lines.length, 2));
     const top = this.y;
@@ -156,7 +262,7 @@ export class PdfFlow {
     for (const line of lines) {
       this.need(lineHeight);
       this.y -= lineHeight;
-      if (line) this.page.drawText(line, { x: MARGIN + textIndent, y: this.y + size * 0.28, size, font: this.regular, color: INK });
+      this.drawRichLine(line, MARGIN + textIndent, size, 'ink');
     }
     this.y -= after;
   }

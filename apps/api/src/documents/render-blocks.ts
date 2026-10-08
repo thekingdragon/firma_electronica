@@ -1,4 +1,5 @@
 import { Block, VariableContext, dataStrings, fillVariables, resolveBlocks } from './blocks';
+import { plainText, stripMarks } from './inline';
 import { PdfFlow } from './pdf-flow';
 import type { DocumentRenderer, RenderInput } from './types';
 
@@ -45,7 +46,7 @@ export const renderBlocksDocument: DocumentRenderer = async (input: RenderInput)
   const f = await PdfFlow.create();
   const { doc } = f;
   const firstTitle = blocks.find((b) => b.type === 'title');
-  doc.setTitle(`${firstTitle && firstTitle.type === 'title' ? fill(firstTitle.text) : 'Documento'} ${input.reference}`);
+  doc.setTitle(`${firstTitle && firstTitle.type === 'title' ? plainText(fill(firstTitle.text)) : 'Documento'} ${input.reference}`);
   doc.setAuthor(input.issuer.legalName);
   doc.setSubject('Documento firmado electrónicamente');
   doc.setProducer('firma-electronica-service');
@@ -100,8 +101,8 @@ export const renderBlocksDocument: DocumentRenderer = async (input: RenderInput)
       case 'signerBox':
         f.need(90);
         f.paragraph(fill(b.title), { bold: true, after: 4 });
-        f.field('Nombre:', input.signer.name, { indent: 10 });
-        f.field('Documento:', `${input.signer.documentType} ${input.signer.documentNumber}`, { indent: 10 });
+        f.paragraph(`Nombre: **${stripMarks(input.signer.name)}**`, { indent: 10, after: 3 });
+        f.paragraph(`Documento: **${stripMarks(input.signer.documentType)} ${stripMarks(input.signer.documentNumber)}**`, { indent: 10, after: 3 });
         f.gap(6);
         return;
       case 'signatureStamp':

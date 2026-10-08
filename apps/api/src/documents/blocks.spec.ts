@@ -183,7 +183,7 @@ describe('toViewBlocks (lo que ve el firmante)', () => {
     expect(view.find((b) => b.type === 'paragraph')).toMatchObject({ text: 'Yo, Ana Pérez (DNI 12345678)' });
   });
   it('una lista de datos llega ya resuelta como lista (sin los vacíos)', () => {
-    expect(view.find((b) => b.id === 'seg')).toEqual({ id: 'seg', type: 'list', items: ['SCTR', 'Vida'], style: 'letters' });
+    expect(view.find((b) => b.id === 'seg')).toEqual({ id: 'seg', type: 'list', items: ['**SCTR**', '**Vida**'], style: 'letters' });
   });
   it('el encabezado respeta qué mostrar', () => {
     const v = toViewBlocks([{ id: 'e', type: 'issuerHeader', showRegistry: false, showDate: false }], ctx, {});

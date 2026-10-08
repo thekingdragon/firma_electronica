@@ -11,6 +11,7 @@
  */
 import { z } from 'zod';
 import { DEFAULT_LETTER_TEXTS } from './appointment-letter-texts';
+import { hasUnbalancedMarks, stripMarks } from './inline';
 
 // ---------------------------------------------------------------------------------------------------------
 // Variables: lo único que un texto puede interpolar. Cualquier otra cosa es un error al publicar.
@@ -41,14 +42,15 @@ export interface VariableContext {
 
 /** Reemplaza las variables conocidas; las desconocidas quedan tal cual (la validación ya las rechazó al publicar). */
 export function fillVariables(text: string, ctx: VariableContext): string {
+  // Un valor que trajera `**` abriría o cerraría una negrita en medio del texto: se le quitan.
   const values: Record<string, string> = {
-    'broker.legalName': ctx.brokerLegalName,
-    'broker.registryCode': ctx.brokerRegistryCode ?? '',
-    'signer.name': ctx.signerName,
-    'signer.documentType': ctx.signerDocumentType,
-    'signer.documentNumber': ctx.signerDocumentNumber,
-    reference: ctx.reference,
-    date: ctx.date,
+    'broker.legalName': stripMarks(ctx.brokerLegalName),
+    'broker.registryCode': stripMarks(ctx.brokerRegistryCode ?? ''),
+    'signer.name': stripMarks(ctx.signerName),
+    'signer.documentType': stripMarks(ctx.signerDocumentType),
+    'signer.documentNumber': stripMarks(ctx.signerDocumentNumber),
+    reference: stripMarks(ctx.reference),
+    date: stripMarks(ctx.date),
   };
   return text.replace(VARIABLE_RE, (whole, name: string) => (Object.prototype.hasOwnProperty.call(values, name) ? values[name] : whole));
 }
@@ -242,6 +244,9 @@ export function parseBlocks(input: unknown): Block[] {
     ids.add(b.id);
     for (const t of textsOf(b)) {
       chars += t.length;
+      if (hasUnbalancedMarks(t)) {
+        issues.push({ path: `bloque ${i + 1}`, message: 'Hay un «**» sin su pareja: la negrita se abre y se cierra con «**».' });
+      }
       for (const v of unknownVariables(t)) {
         issues.push({ path: `bloque ${i + 1}`, message: `La variable {{${v}}} no existe. Disponibles: ${VARIABLES.map((x) => `{{${x.name}}}`).join(', ')}.` });
       }
@@ -364,7 +369,8 @@ export function toViewBlocks(blocks: Block[], ctx: VariableContext, data: Record
       case 'list':
         return { id: b.id, type: b.type, items: b.items.map(f), style: b.style };
       case 'dataList':
-        return { id: b.id, type: 'list', items: dataStrings(data, b.dataKey), style: b.style === 'bullet' ? 'bullet' : 'letters' };
+        // Los datos de la solicitud (los seguros) van en negrita, igual que en el PDF.
+        return { id: b.id, type: 'list', items: dataStrings(data, b.dataKey).map((x) => `**${stripMarks(x)}**`), style: b.style === 'bullet' ? 'bullet' : 'letters' };
       case 'powers':
         return {
           id: b.id,

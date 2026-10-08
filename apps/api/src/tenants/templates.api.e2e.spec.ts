@@ -272,7 +272,7 @@ describe('API de plantillas', () => {
       expect(view.blocks[1].text).toBe('CARTA DE Corredora A SAC');
       expect(view.blocks[2].text).toBe('Yo, Ana Pérez Quispe, con DNI 12345678.');
       expect(view.blocks[3]).toMatchObject({ style: 'check', items: ['Riesgos generales', 'Riesgos humanos'] });
-      expect(view.blocks[4]).toMatchObject({ style: 'letters', items: ['SCTR Salud', 'SCTR Pensión'] });
+      expect(view.blocks[4]).toMatchObject({ style: 'letters', items: ['**SCTR Salud**', '**SCTR Pensión**'] });
       expect(view.blocks[5].items.map((i: { code: string }) => i.code)).toEqual(['SINIESTRALIDAD', 'RENOVAR']);
       expect(view.blocks[0]).toMatchObject({ legalName: 'Corredora A SAC', registryCode: 'J701' });
       expect(view.policy.photoRequired).toBe(false);
