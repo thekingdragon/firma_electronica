@@ -13,7 +13,7 @@ export const DEFAULT_LETTER_TEXTS = {
     'para efectuar la asesoría e intermediación de los seguros que se señalan a continuación:',
   powersIntro: 'Por lo tanto se encuentran facultados para realizar los siguientes actos en mi representación que implica:',
   observationLabel:
-    'Observación: En caso el contratante o asegurado quiera otorgar alguna de las facultades antes mencionadas, debe especificarla:',
+    'Condiciones: si desea que alguna de las facultades marcadas tenga límites o condiciones, indíquelas aquí:',
   noObservation: '—',
   closing: 'Atentamente,',
   signerBlock: 'Datos de contratante o asegurado',
