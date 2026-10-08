@@ -61,17 +61,50 @@ const CONSENTIMIENTO_DATOS =
   'reglamento. Sé que puedo ejercer mis derechos de acceso, rectificación, cancelación y oposición, y pedir copia de mi ' +
   'información, enviando una solicitud a {{broker.legalName}}. [BORRADOR: texto sujeto a revisión legal]';
 
+// Textos tomados de modelos de cartas reales (se descartó todo lo de responsabilidad civil y reclamos). Todo es
+// editable por la corredora desde el panel; el texto definitivo es materia de la revisión legal.
+const REFERENCIA = 'Referencia: Carta de Nombramiento de Corredor de Seguros';
+const VIGENCIA =
+  'Este nombramiento reemplaza todos los demás que haya otorgado anteriormente. Asimismo, abarca todos los asuntos ' +
+  'relativos a la negociación, colocación y administración de mis pólizas de seguros, conforme al marco regulatorio, y ' +
+  'permanecerá vigente hasta que {{broker.legalName}} reciba una notificación escrita en contrario.';
+const ASEGURADORAS =
+  'Las aseguradoras a las cuales {{broker.legalName}} presente esta comunicación deberán brindarle toda la asistencia ' +
+  'que pueda solicitar en mi nombre, suministrándole la información que requiera, incluyendo pólizas, siniestralidad, ' +
+  'límites, tasas, condiciones, aplicaciones anteriores y cualquier otra información que necesite para cumplir los ' +
+  'deberes y obligaciones propios del corretaje y la asesoría en seguros.';
+const ANEXO_REF = 'Se adjunta, en calidad de Anexo, las obligaciones del corredor de seguros de conformidad con la Resolución SBS N.º 809-2019.';
+const CONSENTIMIENTO_BENCHMARKING =
+  'Autorizo que {{broker.legalName}} incluya, de manera no identificable, información relativa a mi programa de seguros ' +
+  'para realizar análisis comparativos (benchmarking), modelado y ofertas de análisis de datos y de seguros.';
+
+const par = (id: string, text: string): Block => ({ id, type: 'paragraph', text, align: 'left', bold: false, small: false });
+
 function carta(): Block[] {
-  const blocks = blocksFromLegacy(
+  const base = blocksFromLegacy(
     {
       powers: FACULTADES_CARTA.map(([code, text]) => ({ code, text, defaultChecked: true })),
       observation: { maxLength: 1000 },
     },
     ANEXO_A_CARTA,
   );
-  const i = blocks.findIndex((b) => b.type === 'signerBox');
-  blocks.splice(i < 0 ? blocks.length : i, 0, { id: 'datos', type: 'consent', code: 'DATOS_PERSONALES', text: CONSENTIMIENTO_DATOS, required: true });
-  return blocks;
+  // Se arma en el orden de la carta: lo propio de cada bloque va justo después del que le corresponde.
+  const out: Block[] = [];
+  for (const b of base) {
+    if (b.id === 'cierre') {
+      // Los consentimientos van antes del cierre («Atentamente»), cada uno con su casilla.
+      out.push({ id: 'datos', type: 'consent', code: 'DATOS_PERSONALES', text: CONSENTIMIENTO_DATOS, required: true });
+      out.push({ id: 'benchmarking', type: 'consent', code: 'BENCHMARKING', text: CONSENTIMIENTO_BENCHMARKING, required: false });
+    }
+    out.push(b);
+    if (b.id === 'destinatario') out.push(par('referencia', REFERENCIA));
+    if (b.id === 'seguros') out.push(par('vigencia', VIGENCIA));
+    if (b.id === 'facultades') {
+      out.push(par('aseguradoras', ASEGURADORAS));
+      out.push(par('anexo-ref', ANEXO_REF));
+    }
+  }
+  return out;
 }
 
 export function defaultTemplates(): TemplateSeed[] {
