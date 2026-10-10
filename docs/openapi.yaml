@@ -298,6 +298,23 @@ paths:
             application/pdf:
               schema: { type: string, format: binary }
         '422': { description: VALIDATION_ERROR }
+  /v1/requests/{id}/evidence-package:
+    get:
+      summary: Paquete de evidencia (ZIP) para demostrar la firma sin depender de este servicio
+      description: |
+        Contiene el PDF sellado, el certificado con que se selló, el sello de tiempo (si lo hay), la bitácora con su cadena
+        de huellas, lo registrado de la identidad, las fotos (si no vencieron), un manifiesto con la huella de cada archivo y
+        un LEEME con cómo verificarlo. 404 si es de otro tenant; 409 si todavía no está firmada.
+      security: [{ apiKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      responses:
+        '200':
+          description: El ZIP
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        '404': { description: REQUEST_NOT_FOUND }
+        '409': { description: NOT_SIGNED }
   /v1/requests/{id}/id-photo-back:
     get:
       summary: Reverso del documento de identidad (bytes), para la revisión humana
@@ -572,6 +589,19 @@ components:
         photo: { type: object, nullable: true, description: "{ width, height, sha256, receivedAt, deletedAt }; deletedAt si la retención la borró." }
         idPhoto: { type: object, nullable: true, description: "Foto del documento de identidad (frente); misma forma que photo." }
         idPhotoBack: { type: object, nullable: true, description: "Foto del reverso del documento; misma forma que photo." }
+        integrity:
+          type: object
+          description: |
+            Verificación de punta a punta que se recalcula al pedir la evidencia: huella del PDF, sello de integridad, sello
+            de tiempo y cadena de la bitácora. `ok` exige PDF íntegro, sello válido que cubre todo el archivo y de la llave
+            registrada, y cadena sin romper; el sello de tiempo es opcional.
+          properties:
+            ok: { type: boolean }
+            pdfIntact: { type: boolean }
+            seal: { type: object }
+            timestamp: { type: object }
+            chain: { type: object }
+            problems: { type: array, items: { type: string } }
         challenge: { type: object, nullable: true, description: "{ code, issuedAt }: el código que debía verse en el papel." }
         form: { type: object, description: Lo que el firmante marcó y escribió. }
         clauseText: { type: string, description: Texto exacto de la cláusula que aceptó. }
@@ -600,6 +630,7 @@ components:
             photoChallengeRequired: { type: boolean }
             idPhotoRequired: { type: boolean }
             idPhotoBackRequired: { type: boolean }
+            reviewRequired: { type: boolean, description: "Si es true, el firmante recibe su copia solo cuando la corredora verifica su identidad." }
         expiresAt: { type: string, format: date-time }
     Settings:
       type: object
@@ -657,6 +688,7 @@ components:
             photoChallengeRequired: { type: boolean }
             idPhotoRequired: { type: boolean }
             idPhotoBackRequired: { type: boolean }
+            reviewRequired: { type: boolean, description: "Si es true, el firmante recibe su copia solo cuando la corredora verifica su identidad." }
         variables: { type: array, items: { type: object, properties: { name: { type: string }, label: { type: string } } } }
         versions: { type: array, items: { type: object } }
     PublishTemplate:
@@ -667,13 +699,14 @@ components:
         clauseText: { type: string }
         policy:
           type: object
-          required: [otpRequired, photoRequired, photoChallengeRequired, idPhotoRequired, idPhotoBackRequired]
+          required: [otpRequired, photoRequired, photoChallengeRequired, idPhotoRequired, idPhotoBackRequired, reviewRequired]
           properties:
             otpRequired: { type: boolean }
             photoRequired: { type: boolean }
             photoChallengeRequired: { type: boolean }
             idPhotoRequired: { type: boolean }
             idPhotoBackRequired: { type: boolean }
+            reviewRequired: { type: boolean, description: "Si es true, el firmante recibe su copia solo cuando la corredora verifica su identidad." }
         legalReviewed: { type: boolean, default: false }
         publishedBy: { type: string, description: Quién publica; queda registrado. }
     Verified:

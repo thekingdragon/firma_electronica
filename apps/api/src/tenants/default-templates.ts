@@ -17,6 +17,8 @@ export interface TemplateSeed {
   idPhotoRequired: boolean;
   /** Reverso del documento de identidad (exige idPhotoRequired). */
   idPhotoBackRequired: boolean;
+  /** El firmante recibe su copia solo cuando alguien de la corredora verifica su identidad. */
+  reviewRequired: boolean;
 }
 
 // Facultades del art. 32.1 de la Res. SBS 809-2019 (Anexo I, modelo de carta de nombramiento).
@@ -152,6 +154,8 @@ export function defaultTemplates(): TemplateSeed[] {
       photoChallengeRequired: true,
       idPhotoRequired: true,
       idPhotoBackRequired: true,
+      // Apagada de partida: con ella encendida el firmante no recibe su copia hasta que alguien revise. Se enciende desde el panel.
+      reviewRequired: false,
     },
   ];
 }

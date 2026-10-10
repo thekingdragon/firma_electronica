@@ -7,12 +7,14 @@ export function DoneStep({
   reference,
   signedAt,
   emailed,
+  awaitingReview,
 }: {
   token: string;
   session: string | null;
   reference: string;
   signedAt: string | null;
   emailed: boolean;
+  awaitingReview: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,8 +51,14 @@ export function DoneStep({
           {signedAt && new Date(signedAt).toLocaleString('es-PE', { dateStyle: 'long', timeStyle: 'short' })}
         </p>
       )}
+      {awaitingReview && (
+        <p>
+          Su firma quedó registrada. Para entregarle su copia, la corredora primero verificará su identidad; cuando termine se la enviaremos a su
+          correo.
+        </p>
+      )}
       {emailed && <p>Le enviaremos una copia firmada a su correo.</p>}
-      {session ? (
+      {awaitingReview ? null : session ? (
         <>
           <button type="button" className="btn btn-primary btn-block" onClick={download} disabled={busy}>
             {busy ? 'Descargando…' : 'Descargar copia (PDF)'}

@@ -110,6 +110,41 @@ identidad se registra con `POST /v1/requests/:id/review` o en el panel). Prueba 
 `IdentityVerifier`; el servicio guardaría solo el veredicto, el id de verificación y los hashes,
 no el biométrico.
 
+### 6.1 Integridad: sello, sello de tiempo, bitácora y paquete
+
+Qué hace el servicio para que la firma se pueda demostrar después, sin depender de que nadie «confíe»
+en la base de datos:
+
+- **PDF sellado.** Al firmar, el PDF se sella (firma digital desprendida CMS, estilo PAdES) con una llave
+  propia del servicio; el sello cubre todo el archivo, así que cualquier cambio posterior lo invalida.
+  La llave y su certificado (autofirmado, RSA 2048, 10 años) se generan solos; la llave privada se guarda
+  cifrada con una subllave derivada de `SECRETS_KEY`. **El certificado es autofirmado: sella integridad, no
+  identidad ni es firma digital con valor de certificado reconocido (INDECOPI/ECEP).** Su huella queda en
+  `signature_requests.seal_cert_sha256`.
+- **Sello de tiempo (RFC 3161).** Si hay `TSA_URL`, la huella del PDF sellado se envía a una autoridad
+  de tiempo independiente y su respuesta (`.tsr`) se guarda cifrada. Es opcional y no bloquea la firma;
+  se reintenta en segundo plano.
+- **Bitácora encadenada e inalterable.** Cada evento de `access_log` lleva la huella del anterior
+  (`prev_hash`, `hash`, SHA-256 calculado por la base), solo se agregan filas (UPDATE/DELETE y TRUNCATE
+  rechazados por triggers) y `access_log_verify()` recorre la cadena. Las filas de evidencia y de
+  solicitud ya firmadas solo permiten cambiar las columnas operativas (rutas de fotos, revisión, sello de
+  tiempo); el resto queda congelado por trigger.
+- **Verificación de punta a punta** (`checkIntegrity`): relee el PDF del disco, recalcula su huella,
+  verifica el sello (y que cubra todo el archivo y sea el de la llave registrada), valida el sello de
+  tiempo y recorre la cadena. La usan el panel (tarjeta «Integridad de la firma»), el paquete y el
+  comando `evidence:verify`.
+- **Paquete de evidencia** (`GET /v1/requests/:id/evidence-package`, botón del panel): ZIP con el PDF
+  sellado, el certificado, el `.tsr`, `evidencia.json` (identidad registrada, bitácora y cadena), las fotos
+  que sigan vigentes, `manifiesto.sha256` y un `LEEME.txt` con cómo verificarlo con herramientas
+  estándar (p. ej. `openssl ts -verify`) sin este servicio.
+- **Revisión que retiene la copia.** Con `reviewRequired` en la política de la plantilla, el firmante
+  queda «firmado» pero su copia (correo y descarga) se retiene hasta que el personal marque la identidad
+  como VERIFICADA; entonces se envía una sola vez. Viene apagado por defecto.
+
+**Lo que esto NO es:** la firma sigue siendo **electrónica simple** con buena evidencia (Ley 27269, art.
+1–3): vale como manifestación de voluntad, pero quien la impugne podrá exigir probar la identidad, y por
+eso existen la revisión y el paquete. No equivale a firma digital con certificado de una ECEP.
+
 ## 7. Seguridad y datos personales
 
 - Link con token de 256 bits derivado por HMAC del id (no se guarda: en base queda su hash); vence
@@ -281,7 +316,13 @@ un SMTP real— más un recorrido manual completo en el navegador montado como e
   cómo se fija el tenant en las rutas públicas (que llegan por token, sin tenant conocido). Con **una
   sola corredora de confianza** no es un riesgo práctico; antes de alojar corredoras que no se conozcan
   entre sí, hay que cerrarlo.
-- **El PDF firmado conserva la foto**, aunque la retención borre el archivo de la foto (§11).
+- **El PDF firmado conserva la foto**, aunque la retención borre el archivo de la foto (§11). Decisión
+  vigente: el PDF y la evidencia no se borran por automatismo (ver DESPLIEGUE §9).
+- **El sello es autofirmado** (§6.1): garantiza integridad y no identidad; no es una ECEP. El sello de
+  tiempo de un tercero requiere `TSA_URL` y es opcional. Las firmas anteriores al sello se muestran como
+  «anterior al sello de integridad».
+- **Respaldo:** `npm run backup` copia base y archivos con manifiesto, pero **no** `SECRETS_KEY` ni lo
+  lleva fuera de la máquina; eso es responsabilidad de quien opera (DESPLIEGUE §8).
 - **El panel entra con la clave de API del tenant** (sin usuarios ni contraseñas ni roles). La clave
   tiene 256 bits y los intentos fallidos se limitan, pero quien la tenga controla el tenant y queda en
   el `localStorage` del navegador. El «nombre de quien revisa» se escribe a mano: la bitácora no puede

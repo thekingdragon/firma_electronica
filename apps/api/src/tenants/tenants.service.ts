@@ -82,8 +82,8 @@ export async function createTenant(
       await client.query(
         `INSERT INTO document_templates
            (tenant_id, document_type, version, body_json, annex_text, clause_text,
-            otp_required, photo_required, photo_challenge_required, id_photo_required, id_photo_back_required, active)
-         VALUES ($1, $2, 1, $3, $4, $5, $6, $7, $8, $9, $10, true)`,
+            otp_required, photo_required, photo_challenge_required, id_photo_required, id_photo_back_required, review_required, active)
+         VALUES ($1, $2, 1, $3, $4, $5, $6, $7, $8, $9, $10, $11, true)`,
         [
           tenant.id,
           t.documentType,
@@ -95,6 +95,7 @@ export async function createTenant(
           t.photoChallengeRequired,
           t.idPhotoRequired,
           t.idPhotoBackRequired,
+          t.reviewRequired,
         ],
       );
     }

@@ -13,7 +13,7 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { makePng } from '../documents/image-fixtures';
 import { StorageService } from '../storage/storage.service';
-import { makeApp, resetDatabase, testDatabaseUrl } from '../test-utils';
+import { makeApp, resetDatabase, rewritePast, testDatabaseUrl } from '../test-utils';
 import { createTenant, setTenantWebhook } from '../tenants/tenants.service';
 import { verifyWebhook } from '../webhooks/signing';
 import { BACKOFF_SECONDS, MAX_ATTEMPTS, WebhookWorker } from '../webhooks/webhook.worker';
@@ -500,7 +500,7 @@ describe('operación: webhooks, revocar, vencimiento, revisión y retención', (
       const vigente = await crear('Hook');
       const firmada = await crear('Hook');
       await firmarOk(firmada);
-      await pool.query(`UPDATE signature_requests SET expires_at = now() - interval '1 minute' WHERE id = ANY($1)`, [[vencida.id, firmada.id]]);
+      await rewritePast(pool, `UPDATE signature_requests SET expires_at = now() - interval '1 minute' WHERE id = ANY($1)`, [[vencida.id, firmada.id]]);
 
       const n = await maintenance.expireOverdue();
       expect(n).toBeGreaterThanOrEqual(1);
@@ -643,7 +643,7 @@ describe('operación: webhooks, revocar, vencimiento, revisión y retención', (
       expect(await existe(antes.photo_path)).toBe(true);
       const pdfAntes = await http().get(`/v1/requests/${s.id}/document`).set('X-Api-Key', T['Retencion'].key);
 
-      await pool.query(`UPDATE signature_requests SET signed_at = now() - interval '2 days' WHERE id=$1`, [s.id]);
+      await rewritePast(pool, `UPDATE signature_requests SET signed_at = now() - interval '2 days' WHERE id=$1`, [s.id]);
       expect(await maintenance.purgeExpiredPhotos()).toBeGreaterThanOrEqual(1);
 
       expect(await existe(antes.photo_path)).toBe(false);
@@ -676,7 +676,7 @@ describe('operación: webhooks, revocar, vencimiento, revisión y retención', (
       expect((await pool.query('SELECT photo_deleted_at FROM signature_evidence WHERE request_id=$1', [s.id])).rows[0].photo_deleted_at).toBeNull();
       expect((await http().get(`/v1/requests/${s.id}/photo`).set('X-Api-Key', T['Retencion'].key)).status).toBe(200);
 
-      await pool.query(`UPDATE signature_requests SET signed_at = now() - interval '2 days' WHERE id=$1`, [s.id]);
+      await rewritePast(pool, `UPDATE signature_requests SET signed_at = now() - interval '2 days' WHERE id=$1`, [s.id]);
       await maintenance.purgeExpiredPhotos();
       expect(await maintenance.purgeExpiredPhotos()).toBe(0);
     });
@@ -684,7 +684,7 @@ describe('operación: webhooks, revocar, vencimiento, revisión y retención', (
     it('el plazo es por tenant: otro con más retención conserva su foto', async () => {
       const s = await crear('ConFoto'); // retention_days por defecto: 1825
       await firmarOk(s, true);
-      await pool.query(`UPDATE signature_requests SET signed_at = now() - interval '30 days' WHERE id=$1`, [s.id]);
+      await rewritePast(pool, `UPDATE signature_requests SET signed_at = now() - interval '30 days' WHERE id=$1`, [s.id]);
       await maintenance.purgeExpiredPhotos();
       expect((await http().get(`/v1/requests/${s.id}/photo`).set('X-Api-Key', T['ConFoto'].key)).status).toBe(200);
     });
@@ -694,7 +694,7 @@ describe('operación: webhooks, revocar, vencimiento, revisión y retención', (
       await firmarOk(s, true);
       const path = (await pool.query('SELECT photo_path FROM signature_evidence WHERE request_id=$1', [s.id])).rows[0].photo_path;
       await storage.remove(path);
-      await pool.query(`UPDATE signature_requests SET signed_at = now() - interval '2 days' WHERE id=$1`, [s.id]);
+      await rewritePast(pool, `UPDATE signature_requests SET signed_at = now() - interval '2 days' WHERE id=$1`, [s.id]);
       await maintenance.purgeExpiredPhotos();
       expect((await pool.query('SELECT photo_deleted_at FROM signature_evidence WHERE request_id=$1', [s.id])).rows[0].photo_deleted_at).not.toBeNull();
     });

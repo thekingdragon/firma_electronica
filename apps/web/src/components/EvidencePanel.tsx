@@ -104,6 +104,7 @@ export function EvidencePanel({
   const [error, setError] = useState<string | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pkgBusy, setPkgBusy] = useState(false);
 
   const load = useCallback(() => {
     api
@@ -113,6 +114,19 @@ export function EvidencePanel({
   }, [apiKey, requestId]);
 
   useEffect(load, [load]);
+
+  async function downloadPackage() {
+    if (!ev) return;
+    setPkgBusy(true);
+    setPdfError(null);
+    try {
+      saveBlob(await api.evidencePackage(apiKey, requestId), `${ev.reference}-evidencia.zip`);
+    } catch (e) {
+      setPdfError(e instanceof Error ? e.message : 'No se pudo descargar el paquete.');
+    } finally {
+      setPkgBusy(false);
+    }
+  }
 
   async function downloadPdf() {
     if (!ev) return;
@@ -147,6 +161,51 @@ export function EvidencePanel({
         </div>
         {pdfError && <p className="error" role="alert">{pdfError}</p>}
         {ev.pdfSha256 && <p className="hint">SHA-256 del PDF: <code className="hash">{ev.pdfSha256}</code></p>}
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <h2>Integridad de la firma</h2>
+          <span className={`badge ${ev.integrity.ok ? 'badge-ok' : 'badge-warn'}`}>{ev.integrity.ok ? 'Verificada' : 'Con problemas'}</span>
+        </div>
+        <ul className="integrity">
+          <li className={ev.integrity.pdfIntact ? 'ok' : 'bad'}>
+            {ev.integrity.pdfIntact ? '✓' : '✗'} El PDF guardado es el mismo que se firmó (su huella coincide).
+          </li>
+          <li className={ev.integrity.seal.valid && ev.integrity.seal.coversWholeFile && ev.integrity.seal.matchesRecord ? 'ok' : 'bad'}>
+            {ev.integrity.seal.valid && ev.integrity.seal.coversWholeFile && ev.integrity.seal.matchesRecord ? '✓' : '✗'}{' '}
+            {ev.integrity.seal.present
+              ? 'Sello de integridad del PDF: cualquier cambio posterior lo invalidaría.'
+              : 'Esta firma es anterior al sello de integridad: su PDF no está sellado.'}
+            {ev.integrity.seal.certificateSha256 && (
+              <>
+                {' '}Certificado <code className="hash">{ev.integrity.seal.certificateSha256.slice(0, 16)}…</code>
+              </>
+            )}
+          </li>
+          <li className={ev.integrity.timestamp.valid ? 'ok' : 'warn'}>
+            {ev.integrity.timestamp.valid
+              ? `✓ Sello de tiempo de una autoridad independiente: ${formatDateTimeSeconds(ev.integrity.timestamp.at as string)}.`
+              : '… Sello de tiempo de un tercero: pendiente o no configurado (la fecha de la firma es la del servidor).'}
+          </li>
+          <li className={ev.integrity.chain.ok ? 'ok' : 'bad'}>
+            {ev.integrity.chain.ok ? '✓' : '✗'} Bitácora encadenada: {ev.integrity.chain.events} eventos
+            {ev.integrity.chain.ok ? ', sin alteraciones.' : `, alterada a partir del evento ${ev.integrity.chain.brokenAt}.`}
+          </li>
+        </ul>
+        {ev.integrity.problems.length > 0 && (
+          <ul className="issues">
+            {ev.integrity.problems.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        )}
+        <div className="actions">
+          <button type="button" className="btn" onClick={downloadPackage} disabled={pkgBusy}>
+            {pkgBusy ? 'Preparando…' : 'Descargar paquete de evidencia (ZIP)'}
+          </button>
+        </div>
+        <p className="hint">El paquete trae el PDF sellado, el sello de tiempo, la bitácora y las fotos, con instrucciones para verificarlo sin este servicio.</p>
       </div>
 
       <div className="card">

@@ -11,6 +11,7 @@ export interface TemplateChanges {
   photoChallengeRequired?: boolean;
   idPhotoRequired?: boolean;
   idPhotoBackRequired?: boolean;
+  reviewRequired?: boolean;
   /** Marca (o desmarca) que el texto pasó la revisión legal. Queda en el contenido de la plantilla. */
   legalReviewed?: boolean;
   /** Los bloques del documento (se validan al publicar). Reemplazan a los textos sueltos y al anexo anterior. */
@@ -64,8 +65,9 @@ export async function publishTemplate(
       photo_challenge_required: boolean;
       id_photo_required: boolean;
       id_photo_back_required: boolean;
+      review_required: boolean;
     }>(
-      `SELECT id, version, active, body_json, annex_text, clause_text, otp_required, photo_required, photo_challenge_required, id_photo_required, id_photo_back_required
+      `SELECT id, version, active, body_json, annex_text, clause_text, otp_required, photo_required, photo_challenge_required, id_photo_required, id_photo_back_required, review_required
          FROM document_templates WHERE tenant_id = $1 AND document_type = $2
         ORDER BY active DESC, version DESC LIMIT 1`,
       [tenantId, documentType],
@@ -116,8 +118,8 @@ export async function publishTemplate(
     const ins = await client.query<{ id: string }>(
       `INSERT INTO document_templates
          (tenant_id, document_type, version, body_json, annex_text, clause_text,
-          otp_required, photo_required, photo_challenge_required, id_photo_required, id_photo_back_required, published_by, active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true)
+          otp_required, photo_required, photo_challenge_required, id_photo_required, id_photo_back_required, review_required, published_by, active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true)
        RETURNING id`,
       [
         tenantId,
@@ -131,6 +133,7 @@ export async function publishTemplate(
         photoChallengeRequired,
         idPhotoRequired,
         idPhotoBackRequired,
+        changes.reviewRequired ?? base.review_required,
         changes.publishedBy ?? null,
       ],
     );

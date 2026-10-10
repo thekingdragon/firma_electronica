@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, OnApplicationShutdown, OnModuleInit } from 
 import { Pool } from 'pg';
 import { APP_CONFIG, AppConfig } from '../config/config';
 import { PG_POOL } from '../db/db.module';
+import { SealService } from '../seal/seal.service';
 import { StorageService } from '../storage/storage.service';
 import { enqueueWebhook } from '../webhooks/outbox';
 
@@ -11,6 +12,7 @@ const LOCK_PURGE = 7_301_002;
 
 const EXPIRE_EVERY_MS = 60_000;
 const PURGE_EVERY_MS = 6 * 60 * 60_000;
+const STAMP_EVERY_MS = 60_000;
 const PURGE_BATCH = 100;
 
 /**
@@ -35,6 +37,7 @@ export class MaintenanceService implements OnModuleInit, OnApplicationShutdown {
     @Inject(PG_POOL) private readonly pool: Pool,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly storage: StorageService,
+    private readonly seal: SealService,
   ) {}
 
   onModuleInit(): void {
@@ -46,6 +49,7 @@ export class MaintenanceService implements OnModuleInit, OnApplicationShutdown {
     };
     every(EXPIRE_EVERY_MS, () => this.expireOverdue(), 'Vencimiento');
     every(PURGE_EVERY_MS, () => this.purgeExpiredPhotos(), 'Retención');
+    every(STAMP_EVERY_MS, () => this.seal.retryPending(), 'Sello de tiempo');
   }
 
   async onApplicationShutdown(): Promise<void> {

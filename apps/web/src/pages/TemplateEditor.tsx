@@ -242,7 +242,14 @@ export function TemplateEditor() {
           />
           <span>… y también el reverso del documento</span>
         </label>
-        <p className="hint">La revisión de las fotos la hace el personal de la corredora desde cada solicitud firmada.</p>
+        <label className="check">
+          <input type="checkbox" checked={draft.policy.reviewRequired} onChange={(e) => setPolicy({ reviewRequired: e.target.checked })} />
+          <span>El firmante recibe su copia solo cuando alguien de la corredora verifique su identidad</span>
+        </label>
+        <p className="hint">
+          La revisión de las fotos la hace el personal de la corredora desde cada solicitud firmada. Con la última casilla marcada, la copia
+          (por correo y por descarga) queda retenida hasta que se marque «Identidad verificada».
+        </p>
       </div>
 
       <div className="card">

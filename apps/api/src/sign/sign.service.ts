@@ -37,7 +37,7 @@ export interface SigningView {
   /** El documento como lista de bloques, con las variables ya completas: la página solo lo dibuja. */
   blocks: ViewBlock[];
   clause: { version: number; text: string };
-  policy: { photoRequired: boolean; photoChallengeRequired: boolean; idPhotoRequired: boolean; idPhotoBackRequired: boolean };
+  policy: { photoRequired: boolean; photoChallengeRequired: boolean; idPhotoRequired: boolean; idPhotoBackRequired: boolean; reviewRequired: boolean };
   expiresAt: string;
 }
 
@@ -63,6 +63,7 @@ export interface LinkRow {
   photo_challenge_required: boolean;
   id_photo_required: boolean;
   id_photo_back_required: boolean;
+  review_required: boolean;
 }
 
 const TOKEN_FORMAT = /^[A-Za-z0-9_-]{43}$/;
@@ -100,7 +101,7 @@ export class SignService {
               r.otp_channel, r.otp_to, r.snapshot,
               t.legal_name, t.registry_code,
               d.version AS template_version, d.body_json, d.annex_text, d.clause_text,
-              d.photo_required, d.photo_challenge_required, d.id_photo_required, d.id_photo_back_required
+              d.photo_required, d.photo_challenge_required, d.id_photo_required, d.id_photo_back_required, d.review_required
          FROM signature_requests r
          JOIN tenants t ON t.id = r.tenant_id
          JOIN document_templates d ON d.id = r.template_id
@@ -321,7 +322,7 @@ export class SignService {
       data: row.snapshot.data,
       blocks: this.viewBlocks(row),
       clause: { version: row.template_version, text: row.clause_text },
-      policy: { photoRequired: row.photo_required, photoChallengeRequired: row.photo_challenge_required, idPhotoRequired: row.id_photo_required, idPhotoBackRequired: row.id_photo_back_required },
+      policy: { photoRequired: row.photo_required, photoChallengeRequired: row.photo_challenge_required, idPhotoRequired: row.id_photo_required, idPhotoBackRequired: row.id_photo_back_required, reviewRequired: row.review_required },
       expiresAt: row.expires_at.toISOString(),
     };
   }

@@ -8,3 +8,5 @@ dist/
 /storage/
 /apps/*/storage/
 *.dump
+/backups/
+/apps/*/backups/

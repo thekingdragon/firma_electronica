@@ -971,3 +971,15 @@ div.photo-box {
     grid-column: 1;
   }
 }
+
+/* ---- Integridad de la firma (panel) ---- */
+.integrity {
+  list-style: none;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+.integrity .ok { color: var(--ok, #166534); }
+.integrity .bad { color: var(--danger, #b91c1c); font-weight: 600; }
+.integrity .warn { color: var(--muted, #6b7280); }

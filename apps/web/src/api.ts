@@ -101,6 +101,16 @@ export interface CreatedRequest {
   expiresAt: string;
 }
 
+/** Verificación de punta a punta de una firma: PDF, sello de integridad, sello de tiempo y bitácora (se recalcula al pedirla). */
+export interface Integrity {
+  ok: boolean;
+  pdfIntact: boolean;
+  seal: { present: boolean; valid: boolean; coversWholeFile: boolean; certificateSha256: string | null; matchesRecord: boolean };
+  timestamp: { present: boolean; valid: boolean; at: string | null };
+  chain: { ok: boolean; events: number; head: string | null; brokenAt: number | null };
+  problems: string[];
+}
+
 export interface Evidence {
   requestId: string;
   reference: string;
@@ -112,6 +122,7 @@ export interface Evidence {
   photo: { width: number; height: number; sha256: string; receivedAt: string | null; deletedAt: string | null } | null;
   idPhoto: { width: number; height: number; sha256: string; receivedAt: string | null; deletedAt: string | null } | null;
   idPhotoBack: { width: number; height: number; sha256: string; receivedAt: string | null; deletedAt: string | null } | null;
+  integrity: Integrity;
   challenge: { code: string; issuedAt: string } | null;
   form: { powers?: string[]; observation?: string } | null;
   clauseText: string;
@@ -156,6 +167,7 @@ export interface TemplatePolicy {
   photoChallengeRequired: boolean;
   idPhotoRequired: boolean;
   idPhotoBackRequired: boolean;
+  reviewRequired: boolean;
 }
 
 export interface TemplateVersionSummary {
@@ -238,6 +250,7 @@ export const api = {
   document: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/document`, key),
   photo: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/photo`, key),
   idPhoto: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/id-photo`, key),
+  evidencePackage: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/evidence-package`, key),
   idPhotoBack: (key: string, id: string) => fetchBlob(`/v1/requests/${id}/id-photo-back`, key),
   settings: (key: string) => call<{ privacyNotice: string | null }>('GET', '/v1/settings', key).then((r) => r.data),
   saveSettings: (key: string, body: { privacyNotice: string | null }) =>

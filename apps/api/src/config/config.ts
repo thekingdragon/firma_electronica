@@ -47,6 +47,8 @@ const envSchema = z.object({
   // Panel compilado (`apps/web/dist`). Si existe, la API lo sirve en la misma dirección y puerto:
   // un solo proceso y una sola ruta de túnel en producción.
   WEB_DIST_DIR: z.string().min(1).optional(),
+  // Autoridad de sellado de tiempo (RFC 3161). Sin ella las firmas se sellan igual, pero sin hora de un tercero.
+  TSA_URL: z.url().optional(),
 });
 
 export type AppConfig = {
@@ -64,6 +66,7 @@ export type AppConfig = {
   backgroundJobs: boolean;
   publicRateLimitPerMin: number;
   webDistDir: string | null;
+  tsaUrl: string | null;
 };
 
 /** Lee y valida el entorno. Falla al arrancar, no en la primera petición. */
@@ -96,5 +99,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     backgroundJobs: e.BACKGROUND_JOBS,
     publicRateLimitPerMin: e.PUBLIC_RATE_LIMIT_PER_MIN,
     webDistDir: e.WEB_DIST_DIR ? resolve(e.WEB_DIST_DIR) : null,
+    tsaUrl: e.TSA_URL ?? null,
   };
 }

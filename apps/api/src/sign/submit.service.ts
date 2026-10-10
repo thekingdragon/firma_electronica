@@ -8,6 +8,8 @@ import { imageInfo } from '../documents/image-info';
 import { renderDocument, resolveContent } from '../documents/render';
 import { enqueueWebhook } from '../webhooks/outbox';
 import { MailService } from '../mail/mail.service';
+import { confirmationMessage } from '../mail/confirmation';
+import { SealKeyUnreadableError, SealService } from '../seal/seal.service';
 import { StorageNotConfiguredError, StorageService } from '../storage/storage.service';
 import { PHOTO_POLICY, checkResolution, generateChallengeCode } from './photo';
 import { ClientContext, LinkRow, SignService, toInet } from './sign.service';
@@ -29,6 +31,8 @@ export interface SubmitResult {
   pdfSha256: string;
   /** `true` solo si el servicio SÍ va a mandar la copia por correo (hay correo del firmante y SMTP del tenant). */
   emailed: boolean;
+  /** La plantilla exige que la corredora verifique la identidad antes de entregar la copia: todavía no se entrega. */
+  awaitingReview: boolean;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -60,6 +64,7 @@ export class SubmitService implements OnApplicationShutdown {
     private readonly sign: SignService,
     private readonly storage: StorageService,
     private readonly mail: MailService,
+    private readonly seal: SealService,
   ) {}
 
   /** Emite un código nuevo para la foto; el anterior deja de valer. Requiere sesión verificada. */
@@ -194,8 +199,7 @@ export class SubmitService implements OnApplicationShutdown {
       }
 
       const signedAt = (await client.query<{ now: Date }>('SELECT now()')).rows[0].now;
-      const pdf = Buffer.from(
-        await renderDocument(link.document_type, {
+      const unsealed = await renderDocument(link.document_type, {
           reference: link.reference,
           issuer: { legalName: link.legal_name, registryCode: link.registry_code },
           signer: link.snapshot.signer,
@@ -213,8 +217,17 @@ export class SubmitService implements OnApplicationShutdown {
             idPhoto,
             idPhotoBack,
           },
-        }),
-      );
+        });
+      // El PDF se SELLA antes de guardarlo: lo que se guarda, se envía y se hashea es el PDF sellado, de modo que
+      // cualquier cambio posterior (aunque sea un byte) lo invalida y se puede demostrar.
+      const sealed = await this.seal.seal(unsealed, {
+        reason: 'Documento firmado electrónicamente',
+        name: 'Servicio de firma electrónica',
+        location: link.legal_name,
+        contactInfo: link.reference,
+        signingTime: signedAt,
+      });
+      const pdf = sealed.pdf;
       const pdfSha = createHash('sha256').update(pdf).digest('hex');
 
       const base = `${link.tenant_id}/${link.id}`;
@@ -238,9 +251,9 @@ export class SubmitService implements OnApplicationShutdown {
       }
 
       const upd = await client.query(
-        `UPDATE signature_requests SET status = 'SIGNED', signed_at = $2, pdf_path = $3, pdf_sha256 = $4
+        `UPDATE signature_requests SET status = 'SIGNED', signed_at = $2, pdf_path = $3, pdf_sha256 = $4, seal_cert_sha256 = $5
           WHERE id = $1 AND status = 'PENDING' RETURNING id`,
-        [link.id, signedAt, pdfPath, pdfSha],
+        [link.id, signedAt, pdfPath, pdfSha, sealed.certificateSha256],
       );
       if (!upd.rowCount) throw new ApiError(410, 'ALREADY_SIGNED', 'Este documento ya fue firmado.');
 
@@ -285,18 +298,25 @@ export class SubmitService implements OnApplicationShutdown {
       await enqueueWebhook(client, link.id, 'signature.signed');
 
       await client.query('COMMIT');
-      await this.sign.log(link.id, 'signed', ctx, { pdfSha256: pdfSha });
-      const emailed = link.otp_channel === 'EMAIL' && !!link.otp_to && (await this.mail.isConfigured(link.tenant_id));
+      await this.sign.log(link.id, 'signed', ctx, { pdfSha256: pdfSha, sealCertSha256: sealed.certificateSha256 });
+      // Sello de tiempo de un tercero: fuera de la transacción y sin bloquear la firma (si falla, se reintenta solo).
+      if (this.seal.timestampEnabled) this.trackConfirmation(this.seal.stamp(link.id, link.tenant_id, pdfSha).then(() => undefined));
+      // Con revisión obligatoria, la copia NO sale (ni por correo ni por descarga) hasta que se verifique la identidad.
+      const emailed = !link.review_required && link.otp_channel === 'EMAIL' && !!link.otp_to && (await this.mail.isConfigured(link.tenant_id));
       if (emailed) {
         this.trackConfirmation(
           this.sendConfirmation(link, pdf).catch((e) => this.logger.error(`Confirmación de ${link.reference}: ${(e as Error).message}`)),
         );
       }
-      return { reference: link.reference, signedAt: signedAt.toISOString(), pdfSha256: pdfSha, emailed };
+      return { reference: link.reference, signedAt: signedAt.toISOString(), pdfSha256: pdfSha, emailed, awaitingReview: link.review_required };
     } catch (e) {
       await this.rollback(client);
       // Lo que se alcanzó a escribir en disco no quedó referenciado por nada: se borra.
       await Promise.all(written.map((p) => this.storage.remove(p).catch(() => undefined)));
+      if (e instanceof SealKeyUnreadableError) {
+        this.logger.error(e.message);
+        throw new ApiError(503, 'SEAL_NOT_AVAILABLE', 'El servicio no puede sellar el documento en este momento. Contacte a su corredor.');
+      }
       if (e instanceof StorageNotConfiguredError) {
         throw new ApiError(503, 'STORAGE_NOT_CONFIGURED', 'El servicio no está listo para firmar. Contacte a su corredor.');
       }
@@ -322,6 +342,12 @@ export class SubmitService implements OnApplicationShutdown {
   async signedDocument(token: string, sessionToken: string | undefined): Promise<{ pdf: Buffer; filename: string }> {
     const row = await this.sign.find(token);
     this.sign.assertSession(row, sessionToken);
+    if (row.status === 'SIGNED' && row.review_required) {
+      const r = await this.pool.query<{ review_result: string | null }>('SELECT review_result FROM signature_evidence WHERE request_id = $1', [row.id]);
+      if (r.rows[0]?.review_result !== 'VERIFIED') {
+        throw new ApiError(409, 'REVIEW_PENDING', 'Su copia estará disponible cuando se verifique su identidad. Se la enviaremos.');
+      }
+    }
     if (row.status !== 'SIGNED' || !row.pdf_path) {
       throw new ApiError(409, 'NOT_SIGNED', 'Este documento todavía no está firmado.');
     }
@@ -333,14 +359,7 @@ export class SubmitService implements OnApplicationShutdown {
     if (link.otp_channel !== 'EMAIL' || !link.otp_to) return;
     if (!(await this.mail.isConfigured(link.tenant_id))) return;
     try {
-      await this.mail.send(link.tenant_id, {
-        to: link.otp_to,
-        subject: `Su documento firmado ${link.reference}`,
-        text:
-          `Adjuntamos la copia de su documento ${link.reference}, firmado electrónicamente.\n\n` +
-          `Guárdela: es su constancia. Si usted no firmó este documento, comuníquese de inmediato con ${link.legal_name}.`,
-        attachments: [{ filename: `${link.reference}.pdf`, content: pdf, contentType: 'application/pdf' }],
-      });
+      await this.mail.send(link.tenant_id, confirmationMessage({ to: link.otp_to, reference: link.reference, legalName: link.legal_name, pdf }));
       await this.sign.log(link.id, 'confirmation_sent', { ip: null, userAgent: null });
     } catch (e) {
       await this.sign.log(link.id, 'confirmation_failed', { ip: null, userAgent: null }, { reason: (e as Error).message.slice(0, 200) });

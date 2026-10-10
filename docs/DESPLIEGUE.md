@@ -150,10 +150,35 @@ solo escucha en `127.0.0.1`.
 El servidor es a la vez la única copia, igual que con Polix. Respaldar **las tres cosas juntas**:
 
 1. La base `firma_electronica` (`pg_dump`).
-2. La carpeta `STORAGE_DIR` (fotos y PDF **cifrados**).
-3. `SECRETS_KEY`, **en otro lugar**: sin ella la carpeta del punto 2 no se puede leer.
+2. La carpeta `STORAGE_DIR` (fotos, PDF sellados y sellos de tiempo, **cifrados**).
+3. `SECRETS_KEY`, **en otro lugar**: sin ella la carpeta del punto 2 no se puede leer **ni la llave con
+   que se sellan los PDF** (está en la base, cifrada con esta clave).
 
 Los respaldos de Polix **no** incluyen nada de esto.
+
+**Comando.** Hace los puntos 1 y 2 y deja un manifiesto con la huella de cada archivo; conserva los 14 más
+nuevos (`--keep 0` no borra ninguno):
+
+```
+npm run backup -w api -- --out D:\respaldos\firma --keep 14
+npm run backup -w api -- --verify D:\respaldos\firma\<AAAAMMDD-HHMMSS>
+```
+
+El comando **no** copia `SECRETS_KEY` (a propósito: quien tuviera el respaldo tendría también la clave).
+Programe el primero cada noche y copie la carpeta de respaldos **fuera de esta máquina**: un respaldo en el
+mismo disco no protege de una falla del disco. Pruebe restaurar en otra máquina (`pg_restore` + copiar la
+carpeta `storage` a `STORAGE_DIR` + la misma `SECRETS_KEY`) y ejecute `evidence:verify` al terminar: si
+todo cuadra, el respaldo sirve.
+
+**Comprobar las firmas** (PDF intacto, sello válido, sello de tiempo y bitácora sin alterar), a mano o
+programado tras cada respaldo; sale con código 1 si alguna falla:
+
+```
+npm run evidence:verify -w api -- [--tenant <uuid>] [--since 2026-01-01] [--strict]
+```
+
+Las firmas anteriores al sello de integridad se cuentan aparte («anteriores al sello»); con `--strict` se
+tratan como fallo.
 
 ## 9. Operación
 
@@ -163,8 +188,17 @@ Los respaldos de Polix **no** incluyen nada de esto.
   a `EXPIRED` y avisa al host.
 - **Retención de fotos:** cada 6 horas se borran los archivos de foto cuyo plazo (`retention_days` del
   tenant, 1825 días por defecto, contado desde la firma) venció. Se conservan los hash y la constancia.
-  **El PDF firmado lleva la foto incrustada y no se toca**: si la retención debe alcanzar también esa
-  copia, es una decisión legal pendiente.
+  **El PDF firmado y su evidencia (bitácora, huellas, sello de tiempo) NO se borran nunca por
+  automatismo**: son la prueba de la firma y el PDF lleva la foto incrustada. Decisión vigente: se conservan
+  mientras el tenant no pida lo contrario; si la retención debe alcanzar también esa copia, es una decisión
+  legal pendiente y debe ser un borrado explícito, no un trabajo programado.
+- **Sello de tiempo de un tercero:** defina `TSA_URL` (p. ej. `http://timestamp.digicert.com`, gratuita).
+  Sin ella la firma funciona, pero su fecha es solo la del servidor. Si la autoridad no responde, la firma
+  **no se bloquea**: el sello se reintenta en segundo plano (hasta 12 veces, con esperas crecientes) y el
+  panel muestra «pendiente».
+- **La llave de sello** se crea sola con la primera firma y se guarda cifrada con `SECRETS_KEY`. Si
+  `SECRETS_KEY` cambia, el servicio **se niega a firmar** (error `SEAL_NOT_AVAILABLE`, 503) en vez de crear
+  otra llave en silencio: restaure la clave correcta.
 - **Rotar `TOKEN_SECRET`:** invalida los enlaces de las solicitudes pendientes. Hágalo sin solicitudes
   vivas.
 - **El servicio no tiene RLS entre tenants** (ver ARQUITECTURA §13). Con una sola corredora de confianza

@@ -5,6 +5,8 @@ import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { join } from 'node:path';
 import { AddressInfo } from 'node:net';
+import { createServer } from 'node:http';
+import forge from 'node-forge';
 import { Pool } from 'pg';
 import { SMTPServer } from 'smtp-server';
 import { configureApp } from './app.setup';
@@ -26,6 +28,8 @@ export async function resetDatabase(url: string): Promise<Pool> {
   await applyMigrations(url, join(__dirname, '..', 'migrations'));
   const pool = new Pool({ connectionString: url });
   await pool.query('TRUNCATE tenants CASCADE');
+  // La llave de sello va cifrada con SECRETS_KEY y las pruebas usan una distinta cada vez: la anterior no serviría.
+  await pool.query('TRUNCATE seal_keys');
   return pool;
 }
 
@@ -165,4 +169,95 @@ export async function closedPort(): Promise<number> {
   const port = s.port;
   await s.close();
   return port;
+}
+
+/**
+ * Reescribe datos de solicitudes YA firmadas (p. ej. mover `signed_at` al pasado para probar la retención).
+ * El servicio no lo permite: un disparador bloquea los cambios a una solicitud firmada. La prueba, que es dueña de su
+ * base, lo apaga durante esa sentencia y lo vuelve a encender.
+ */
+export async function rewritePast(pool: Pool, sql: string, params: unknown[] = []): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('ALTER TABLE signature_requests DISABLE TRIGGER signature_requests_signed_guard_trg');
+    try {
+      await client.query(sql, params);
+    } finally {
+      await client.query('ALTER TABLE signature_requests ENABLE TRIGGER signature_requests_signed_guard_trg');
+    }
+  } finally {
+    client.release();
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Autoridad de sellado de tiempo falsa (RFC 3161) para las pruebas: responde con la estructura que lee el servicio.
+// ---------------------------------------------------------------------------------------------------------------------
+
+const A = forge.asn1;
+const seq = (...v: forge.asn1.Asn1[]) => A.create(A.Class.UNIVERSAL, A.Type.SEQUENCE, true, v);
+const oid = (o: string) => A.create(A.Class.UNIVERSAL, A.Type.OID, false, A.oidToDer(o).getBytes());
+const int = (n: number) => A.create(A.Class.UNIVERSAL, A.Type.INTEGER, false, String.fromCharCode(n));
+const octets = (bin: string) => A.create(A.Class.UNIVERSAL, A.Type.OCTETSTRING, false, bin);
+const ctx0 = (...v: forge.asn1.Asn1[]) => A.create(A.Class.CONTEXT_SPECIFIC, 0, true, v);
+
+/** Una TimeStampResp «concedida» para esa huella y esa hora. */
+export function fakeTimestampResponse(sha256Hex: string, genTime: Date): Buffer {
+  const tstInfo = seq(
+    int(1),
+    oid('1.2.3.4.5'),
+    seq(seq(oid(forge.pki.oids.sha256 as string), A.create(A.Class.UNIVERSAL, A.Type.NULL, false, '')), octets(Buffer.from(sha256Hex, 'hex').toString('binary'))),
+    int(42),
+    A.create(A.Class.UNIVERSAL, A.Type.GENERALIZEDTIME, false, A.dateToGeneralizedTime(genTime)),
+  );
+  const signedData = seq(
+    int(3),
+    A.create(A.Class.UNIVERSAL, A.Type.SET, true, []),
+    seq(oid('1.2.840.113549.1.9.16.1.4'), ctx0(octets(A.toDer(tstInfo).getBytes()))),
+  );
+  const token = seq(oid('1.2.840.113549.1.7.2'), ctx0(signedData));
+  return Buffer.from(A.toDer(seq(seq(int(0)), token)).getBytes(), 'binary');
+}
+
+export interface FakeTsa {
+  url: string;
+  /** Cuántas solicitudes recibió. */
+  requests: number;
+  /** `ok`: concede; `fail`: responde 500; `wrong`: concede pero de OTRA huella; `denied`: estado «rechazado». */
+  mode: 'ok' | 'fail' | 'wrong' | 'denied';
+  close(): Promise<void>;
+}
+
+export function startFakeTsa(): Promise<FakeTsa> {
+  const tsa: FakeTsa = { url: '', requests: 0, mode: 'ok', close: () => Promise.resolve() };
+  const server = createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (c: Buffer) => chunks.push(c));
+    req.on('end', () => {
+      tsa.requests++;
+      if (tsa.mode === 'fail') {
+        res.writeHead(500).end();
+        return;
+      }
+      try {
+        const body = A.fromDer(Buffer.concat(chunks).toString('binary'));
+        const hash = Buffer.from((((body.value as forge.asn1.Asn1[])[1].value as forge.asn1.Asn1[])[1].value as string), 'binary').toString('hex');
+        if (tsa.mode === 'denied') {
+          res.writeHead(200, { 'Content-Type': 'application/timestamp-reply' }).end(Buffer.from(A.toDer(seq(seq(int(2)))).getBytes(), 'binary'));
+          return;
+        }
+        const answered = tsa.mode === 'wrong' ? 'ab'.repeat(32) : hash;
+        res.writeHead(200, { 'Content-Type': 'application/timestamp-reply' }).end(fakeTimestampResponse(answered, new Date()));
+      } catch {
+        res.writeHead(400).end();
+      }
+    });
+  });
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => {
+      tsa.url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/tsa`;
+      tsa.close = () => new Promise<void>((r) => server.close(() => r()));
+      resolve(tsa);
+    });
+  });
 }

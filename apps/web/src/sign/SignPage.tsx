@@ -92,7 +92,7 @@ export function SignPage() {
         // Ya firmado y con sesión vigente en este navegador: se ofrece la copia.
         if (e instanceof SignApiError && e.code === 'ALREADY_SIGNED' && loadSession(token)) {
           setSession(loadSession(token));
-          setResult({ reference: '', signedAt: '', pdfSha256: '', emailed: false });
+          setResult({ reference: '', signedAt: '', pdfSha256: '', emailed: false, awaitingReview: false });
           setStep('done');
           return;
         }
@@ -170,7 +170,7 @@ export function SignPage() {
         toVerify('Su sesión venció. Verifique su código otra vez.');
       } else if (e.code === 'ALREADY_SIGNED') {
         // Doble clic o respuesta perdida: el documento SÍ quedó firmado.
-        setResult({ reference: view.reference, signedAt: '', pdfSha256: '', emailed: false });
+        setResult({ reference: view.reference, signedAt: '', pdfSha256: '', emailed: false, awaitingReview: view.policy.reviewRequired });
         setStep('done');
       } else if (e.status === 410) {
         close(e);
@@ -321,6 +321,7 @@ export function SignPage() {
           reference={result.reference}
           signedAt={result.signedAt || null}
           emailed={result.emailed}
+          awaitingReview={result.awaitingReview}
         />
       )}
     </main>

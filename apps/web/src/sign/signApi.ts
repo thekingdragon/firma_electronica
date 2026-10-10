@@ -55,7 +55,7 @@ export interface SigningView {
   data: { insurances?: string[] } & Record<string, unknown>;
   blocks: ViewBlock[];
   clause: { version: number; text: string };
-  policy: { photoRequired: boolean; photoChallengeRequired: boolean; idPhotoRequired: boolean; idPhotoBackRequired: boolean };
+  policy: { photoRequired: boolean; photoChallengeRequired: boolean; idPhotoRequired: boolean; idPhotoBackRequired: boolean; reviewRequired: boolean };
   expiresAt: string;
 }
 
@@ -77,6 +77,8 @@ export interface SubmitResult {
   pdfSha256: string;
   /** El servidor confirma que enviará la copia por correo; no se deduce del OTP. */
   emailed: boolean;
+  /** La corredora debe verificar la identidad antes de entregar la copia. */
+  awaitingReview: boolean;
 }
 
 async function request<T>(

@@ -170,5 +170,6 @@ export const renderBlocksDocument: DocumentRenderer = async (input: RenderInput)
   }
 
   f.footers(`${input.reference}  ·  Documento firmado electrónicamente`);
-  return doc.save();
+  // Sin flujos de objetos: el sello de integridad (PDF firmado) necesita la tabla de referencias clásica.
+  return doc.save({ useObjectStreams: false });
 };

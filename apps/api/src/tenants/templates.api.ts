@@ -14,6 +14,7 @@ export interface TemplatePolicy {
   photoChallengeRequired: boolean;
   idPhotoRequired: boolean;
   idPhotoBackRequired: boolean;
+  reviewRequired: boolean;
 }
 
 export interface TemplateVersionSummary {
@@ -56,6 +57,7 @@ const publishSchema = z
         photoChallengeRequired: z.boolean(),
         idPhotoRequired: z.boolean(),
         idPhotoBackRequired: z.boolean(),
+        reviewRequired: z.boolean(),
       })
       .strict(),
     legalReviewed: z.boolean().default(false),
@@ -81,6 +83,7 @@ type Row = {
   photo_challenge_required: boolean;
   id_photo_required: boolean;
   id_photo_back_required: boolean;
+  review_required: boolean;
   published_by: string | null;
   created_at: Date;
 };
@@ -108,7 +111,7 @@ export class TemplatesApiService {
   async list(tenant: Tenant): Promise<{ items: TemplateListItem[] }> {
     const { rows } = await this.pool.query<Row>(
       `SELECT t.id, t.document_type, d.name, t.version, t.active, t.body_json, t.annex_text, t.clause_text,
-              t.otp_required, t.photo_required, t.photo_challenge_required, t.id_photo_required, t.id_photo_back_required, t.published_by, t.created_at
+              t.otp_required, t.photo_required, t.photo_challenge_required, t.id_photo_required, t.id_photo_back_required, t.review_required, t.published_by, t.created_at
          FROM document_templates t JOIN document_types d ON d.code = t.document_type
         WHERE t.tenant_id = $1 AND t.active
         ORDER BY d.name`,
@@ -131,7 +134,7 @@ export class TemplatesApiService {
     this.checkType(documentType);
     const { rows } = await this.pool.query<Row>(
       `SELECT t.id, t.document_type, d.name, t.version, t.active, t.body_json, t.annex_text, t.clause_text,
-              t.otp_required, t.photo_required, t.photo_challenge_required, t.id_photo_required, t.id_photo_back_required, t.published_by, t.created_at
+              t.otp_required, t.photo_required, t.photo_challenge_required, t.id_photo_required, t.id_photo_back_required, t.review_required, t.published_by, t.created_at
          FROM document_templates t JOIN document_types d ON d.code = t.document_type
         WHERE t.tenant_id = $1 AND t.document_type = $2 AND ${version === undefined ? 't.active' : 't.version = $3'}`,
       version === undefined ? [tenant.id, documentType] : [tenant.id, documentType, version],
@@ -160,6 +163,7 @@ export class TemplatesApiService {
         photoChallengeRequired: row.photo_challenge_required,
         idPhotoRequired: row.id_photo_required,
         idPhotoBackRequired: row.id_photo_back_required,
+        reviewRequired: row.review_required,
       },
       variables: VARIABLES,
       versions: all.rows.map((v) => ({
@@ -200,6 +204,7 @@ export class TemplatesApiService {
         photoChallengeRequired: p.policy.photoChallengeRequired,
         idPhotoRequired: p.policy.idPhotoRequired,
         idPhotoBackRequired: p.policy.idPhotoBackRequired,
+        reviewRequired: p.policy.reviewRequired,
         legalReviewed: p.legalReviewed,
         publishedBy: p.publishedBy,
       });

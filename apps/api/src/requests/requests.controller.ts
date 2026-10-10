@@ -14,6 +14,7 @@ import type { Response } from 'express';
 import { ApiError } from '../common/api-error';
 import { ApiKeyGuard, CurrentTenant } from '../tenants/api-key.guard';
 import type { Tenant } from '../tenants/tenants.service';
+import { EvidencePackageService } from './evidence-package.service';
 import { EvidenceView, RequestActionsService } from './request-actions.service';
 import { REQUEST_STATUSES, RequestStatus } from './request-status';
 import { RequestsService, SignatureRequestSummary, SignatureRequestView } from './requests.service';
@@ -24,6 +25,7 @@ export class RequestsController {
   constructor(
     private readonly requests: RequestsService,
     private readonly actions: RequestActionsService,
+    private readonly evidencePackage: EvidencePackageService,
   ) {}
 
   @Post()
@@ -80,6 +82,20 @@ export class RequestsController {
   @Get(':id/document')
   async document(@CurrentTenant() tenant: Tenant, @Param('id') id: string, @Res() res: Response): Promise<void> {
     await this.sendFile(res, await this.requests.getFile(tenant, id, 'document'));
+  }
+
+  /** Todo lo que prueba la firma, en un ZIP que se verifica sin este servicio. */
+  @Get(':id/evidence-package')
+  async evidenceZip(@CurrentTenant() tenant: Tenant, @Param('id') id: string, @Res() res: Response): Promise<void> {
+    const pkg = await this.evidencePackage.build(tenant, id);
+    res
+      .status(200)
+      .set({
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="${pkg.filename}"`,
+        'X-Content-Type-Options': 'nosniff',
+      })
+      .send(pkg.bytes);
   }
 
   @Get(':id/id-photo-back')

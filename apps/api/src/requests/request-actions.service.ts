@@ -3,6 +3,10 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 import { ApiError } from '../common/api-error';
 import { PG_POOL } from '../db/db.module';
+import { MailService } from '../mail/mail.service';
+import { confirmationMessage } from '../mail/confirmation';
+import { IntegrityReport, checkIntegrity } from '../seal/integrity';
+import { StorageService } from '../storage/storage.service';
 import { Tenant } from '../tenants/tenants.service';
 import { enqueueWebhook } from '../webhooks/outbox';
 import { containsReplacementChar } from './requests.service';
@@ -30,6 +34,8 @@ export interface EvidenceView {
   photo: { width: number; height: number; sha256: string; receivedAt: string | null; deletedAt: string | null } | null;
   idPhoto: { width: number; height: number; sha256: string; receivedAt: string | null; deletedAt: string | null } | null;
   idPhotoBack: { width: number; height: number; sha256: string; receivedAt: string | null; deletedAt: string | null } | null;
+  /** Verificación de punta a punta: PDF, sello, sello de tiempo y cadena de la bitácora (se recalcula al pedirla). */
+  integrity: IntegrityReport;
   challenge: { code: string; issuedAt: string } | null;
   form: unknown;
   clauseText: string;
@@ -43,7 +49,11 @@ export interface EvidenceView {
 
 @Injectable()
 export class RequestActionsService {
-  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(PG_POOL) private readonly pool: Pool,
+    private readonly storage: StorageService,
+    private readonly mail: MailService,
+  ) {}
 
   private checkId(id: string): void {
     if (!UUID.test(id)) throw new ApiError(404, 'REQUEST_NOT_FOUND', 'Solicitud no encontrada.');
@@ -84,6 +94,43 @@ export class RequestActionsService {
       throw e;
     } finally {
       client.release();
+    }
+  }
+
+  /**
+   * Si la plantilla exige revisión, la copia se retuvo al firmar: al VERIFICAR la identidad sale por correo (una sola vez).
+   * Mejor esfuerzo: la verificación ya quedó guardada aunque el correo falle; el motivo queda en la bitácora.
+   */
+  private async releaseCopy(id: string): Promise<void> {
+    try {
+      const { rows } = await this.pool.query<{
+        tenant_id: string;
+        reference: string;
+        legal_name: string;
+        otp_channel: string | null;
+        otp_to: string | null;
+        pdf_path: string | null;
+        review_required: boolean;
+        sent: boolean;
+      }>(
+        `SELECT r.tenant_id, r.reference, t.legal_name, r.otp_channel, r.otp_to, r.pdf_path, d.review_required,
+                EXISTS (SELECT 1 FROM access_log l WHERE l.request_id = r.id AND l.event = 'confirmation_sent') AS sent
+           FROM signature_requests r
+           JOIN tenants t ON t.id = r.tenant_id
+           JOIN document_templates d ON d.id = r.template_id
+          WHERE r.id = $1`,
+        [id],
+      );
+      const r = rows[0];
+      if (!r || !r.review_required || r.sent || r.otp_channel !== 'EMAIL' || !r.otp_to || !r.pdf_path) return;
+      if (!(await this.mail.isConfigured(r.tenant_id))) return;
+      const pdf = await this.storage.get(r.pdf_path);
+      await this.mail.send(r.tenant_id, confirmationMessage({ to: r.otp_to, reference: r.reference, legalName: r.legal_name, pdf }));
+      await this.pool.query("INSERT INTO access_log (request_id, event) VALUES ($1, 'confirmation_sent')", [id]);
+    } catch (e) {
+      await this.pool
+        .query("INSERT INTO access_log (request_id, event, detail) VALUES ($1, 'confirmation_failed', $2)", [id, JSON.stringify({ reason: (e as Error).message.slice(0, 200) })])
+        .catch(() => undefined);
     }
   }
 
@@ -132,6 +179,7 @@ export class RequestActionsService {
       idPhotoBack: r.id_back_sha256
         ? { width: r.id_back_width, height: r.id_back_height, sha256: r.id_back_sha256, receivedAt: iso(r.id_back_received_at), deletedAt: iso(r.photo_deleted_at) }
         : null,
+      integrity: await checkIntegrity(this.pool, this.storage, id),
       challenge: r.challenge_code ? { code: r.challenge_code, issuedAt: iso(r.challenge_issued_at) as string } : null,
       form: r.form_json,
       clauseText: r.clause_text,
@@ -186,6 +234,7 @@ export class RequestActionsService {
       ]);
       await enqueueWebhook(client, id, 'signature.reviewed');
       await client.query('COMMIT');
+      if (result === 'VERIFIED') await this.releaseCopy(id);
       return { result, reviewedAt: rows[0].reviewed_at.toISOString() };
     } catch (e) {
       await client.query('ROLLBACK').catch(() => undefined);
