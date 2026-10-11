@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
 import { ApiError } from '../common/api-error';
-import { PG_POOL } from '../db/db.module';
+import { PG_OWNER } from '../db/db.module';
 import { AuthService } from './auth.service';
 import { MfaService } from './mfa.service';
 import { hashPassword, temporaryPassword } from './passwords';
@@ -44,7 +44,7 @@ export async function insertUser(
 @Injectable()
 export class UsersService {
   constructor(
-    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(PG_OWNER) private readonly pool: Pool,
     private readonly auth: AuthService,
     private readonly mfa: MfaService,
   ) {}

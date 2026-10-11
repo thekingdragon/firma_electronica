@@ -145,7 +145,33 @@ en la base de datos:
 1–3): vale como manifestación de voluntad, pero quien la impugne podrá exigir probar la identidad, y por
 eso existen la revisión y el paquete. No equivale a firma digital con certificado de una ECEP.
 
-### 6.2 Usuarios, sesiones y segundo factor del panel
+### 6.2 Aislamiento entre corredoras (RLS)
+
+Patrón de Polix (rol de runtime sin `BYPASSRLS`, política `tenant_isolation` con `current_tenant()`), adaptado a lo que
+este servicio hace distinto. Migración 0012.
+
+- **Dos pools.** `PG_OWNER` (dueño, se salta RLS) para lo que cruza corredoras o ocurre antes de saber cuál es: login y
+  usuarios, panel de operador, alta de corredoras, tareas en segundo plano, y las búsquedas que resuelven la corredora a
+  partir de la clave de API o del token del enlace. `PG_POOL` (runtime, rol `firma_runtime`) para todo lo demás: es una
+  fachada con la forma de `Pool` que, **en cada `query` y cada `connect`, fija `app.current_tenant`** a partir del
+  contexto de la petición (AsyncLocalStorage). Sin contexto, RLS no devuelve filas: falla cerrado.
+- **Contexto.** Un interceptor global fija la corredora tras los guards: la de `req.tenant` (clave de API o sesión) o, en
+  `/v1/sign/:token`, la dueña del enlace (se busca por el hash del token con el pool del dueño). Las tareas en segundo
+  plano que tocan datos de una corredora usan `withTenant(id, fn)`.
+- **Por qué NO una transacción por petición** (como hace Polix): aquí hay rutas que registran un intento fallido (OTP) y
+  después lanzan error; con una transacción envolvente el error revertiría el contador y se perdería la protección contra
+  fuerza bruta. Costo: un viaje extra a la base por consulta.
+- **Políticas:** `tenants`, `document_templates`, `signature_requests` y `tenant_mail_settings` por `tenant_id`; las tablas que
+  cuelgan de una solicitud (`signature_evidence`, `photo_challenges`, `otp_challenges`, `access_log`, `webhook_deliveries`)
+  por `EXISTS` sobre la solicitud. `ENABLE` y no `FORCE`: el dueño las salta a propósito.
+- **Permisos en lista blanca** (`grant_runtime_access`): el runtime no ve `users`, `refresh_tokens`, `mfa_recovery_codes`,
+  `password_resets` ni `schema_migrations`; la bitácora es solo de lectura e inserción. `seal_keys` es global (sin RLS):
+  el runtime la lee para sellar.
+- **Lo que RLS NO cubre:** lo que corre con `PG_OWNER` (auth, operador, jobs, webhooks) depende de que cada consulta filtre
+  por un identificador explícito; y los archivos en disco (`STORAGE_DIR`) se separan por ruta, no por RLS.
+- **Si falta `APP_DATABASE_URL`** la API corre con el dueño y RLS no se aplica: el arranque y el panel de operador lo avisan.
+
+### 6.3 Usuarios, sesiones y segundo factor del panel
 
 Patrón tomado de `gestor_segurov3` (Polix), reescrito con `pg` plano: `users` (rol `OPERATOR`/`ADMIN`/`REVIEWER`, el
 operador sin `tenant_id`, forzado por `CHECK`), `refresh_tokens` con familia y revocación con motivo, `mfa_recovery_codes`
@@ -177,7 +203,7 @@ de recuperación son de un uso y el restablecimiento no se salta el segundo fact
   pedir el OTP, verificarlo y firmar; y límite a los intentos con clave de API inválida (responden
   429, pero una clave válida nunca se bloquea). Requiere `TRUST_PROXY` bien puesto.
 - Tenant identificado por clave de API (guardada como hash). El aislamiento entre tenants es **por
-  consulta** (cada una filtra por `tenant_id`; hay pruebas de aislamiento): **no hay RLS** (§13).
+  consulta** (cada una filtra por `tenant_id`) **y por RLS en la base** (§6.2): una consulta que olvide el filtro no filtra datos.
 - Foto, PDF, contraseñas SMTP y secretos de webhook **cifrados en reposo** (AES-256-GCM, subclave por
   propósito derivada de `SECRETS_KEY`). Los archivos solo se sirven con la clave de API del tenant dueño
   o con la sesión del firmante; no hay URLs firmadas.
@@ -291,7 +317,6 @@ este servicio esté desplegado.
 - Si el servicio debe **negarse a crear solicitudes en producción mientras la plantilla activa siga en
   BORRADOR** (`legalReviewed: false`). Haría cumplir por código la regla «no usar con clientes reales
   sin revisión legal»; hoy es solo una advertencia en la documentación.
-- Cuándo cerrar el aislamiento entre tenants con RLS (ver §13).
 - Fase 2: modelo propio vs proveedor para prueba de vida y comparación facial; vía de acceso al RENIEC
   para un corredor (sin investigar).
 
@@ -332,12 +357,8 @@ un SMTP real— más un recorrido manual completo en el navegador montado como e
 - **Revisión legal pendiente.** Las plantillas por defecto son BORRADOR (`legalReviewed: false` y la
   cláusula lo dice). Publicar el texto definitivo: `template:publish`. Nada impide hoy, por código, usar
   el servicio con el borrador (ver §11).
-- **Sin RLS entre tenants.** El aislamiento depende de que cada consulta filtre por `tenant_id` (con
-  pruebas de aislamiento en cada endpoint, pero un olvido en una consulta futura filtraría datos). Se
-  dejó para después a propósito: exige separar el rol de la aplicación del dueño de la base y decidir
-  cómo se fija el tenant en las rutas públicas (que llegan por token, sin tenant conocido). Con **una
-  sola corredora de confianza** no es un riesgo práctico; antes de alojar corredoras que no se conozcan
-  entre sí, hay que cerrarlo.
+- **RLS entre tenants: hecho** (§6.2), pero **solo está activo si el runtime usa el rol `firma_runtime`**. Lo que corre
+  con el dueño (auth, operador, jobs, webhooks) no tiene esa red de seguridad.
 - **El PDF firmado conserva la foto**, aunque la retención borre el archivo de la foto (§11). Decisión
   vigente: el PDF y la evidencia no se borran por automatismo (ver DESPLIEGUE §9).
 - **El sello es autofirmado** (§6.1): garantiza integridad y no identidad; no es una ECEP. El sello de
@@ -345,7 +366,7 @@ un SMTP real— más un recorrido manual completo en el navegador montado como e
   «anterior al sello de integridad».
 - **Respaldo:** `npm run backup` copia base y archivos con manifiesto, pero **no** `SECRETS_KEY` ni lo
   lleva fuera de la máquina; eso es responsabilidad de quien opera (DESPLIEGUE §8).
-- **El panel ya no entra con la clave de API** (§6.2): usuarios con rol, sesión corta con refresh en cookie HttpOnly y
+- **El panel ya no entra con la clave de API** (§6.3): usuarios con rol, sesión corta con refresh en cookie HttpOnly y
   segundo factor. La clave de API del tenant queda solo para la integración del host. Pendiente: bitácora de inicios de
   sesión en la base y confirmación de recepción del refresh.
 - **Los límites por IP son por proceso y en memoria** (se pierden al reiniciar; con varias instancias,

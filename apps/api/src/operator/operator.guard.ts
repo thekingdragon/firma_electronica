@@ -5,7 +5,7 @@ import { UserRequest } from '../auth/access.guard';
 import { bearerToken, invalidSession, userFromAccessToken } from '../auth/session';
 import { ApiError } from '../common/api-error';
 import { APP_CONFIG, AppConfig } from '../config/config';
-import { PG_POOL } from '../db/db.module';
+import { PG_OWNER } from '../db/db.module';
 
 /**
  * Protege el panel de operador (quien administra el servicio entero): exige una SESIÓN de un usuario con rol OPERATOR,
@@ -18,7 +18,7 @@ export class OperatorGuard implements CanActivate {
   private readonly logger = new Logger(OperatorGuard.name);
 
   constructor(
-    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(PG_OWNER) private readonly pool: Pool,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 

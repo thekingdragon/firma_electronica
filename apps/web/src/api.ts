@@ -306,7 +306,7 @@ export const usersApi = {
 
 // ---- Panel de operador ----
 export interface OperatorOverview {
-  service: { database: boolean; storageWritable: boolean; secretsKey: boolean; sealKey: boolean; timestampAuthority: boolean; backgroundJobs: boolean };
+  service: { database: boolean; storageWritable: boolean; secretsKey: boolean; sealKey: boolean; timestampAuthority: boolean; backgroundJobs: boolean; rlsEnforced: boolean; rlsReason: string | null };
   totals: {
     tenants: number;
     activeTenants: number;

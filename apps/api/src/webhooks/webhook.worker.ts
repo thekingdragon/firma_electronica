@@ -3,7 +3,7 @@ import { Pool } from 'pg';
 import { fetch as undiciFetch, type Agent } from 'undici';
 import { open } from '../common/secret-box';
 import { APP_CONFIG, AppConfig } from '../config/config';
-import { PG_POOL } from '../db/db.module';
+import { PG_OWNER } from '../db/db.module';
 import { signWebhook } from './signing';
 import { assertPublicUrl, createWebhookAgent } from './ssrf';
 
@@ -46,7 +46,7 @@ export class WebhookWorker implements OnModuleInit, OnApplicationShutdown {
   private running: Promise<number> | null = null;
 
   constructor(
-    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(PG_OWNER) private readonly pool: Pool,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {
     this.agent = createWebhookAgent(config.webhookAllowPrivate);

@@ -2,7 +2,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Pool } from 'pg';
 import { ApiError } from '../common/api-error';
 import { APP_CONFIG, AppConfig } from '../config/config';
-import { PG_POOL } from '../db/db.module';
+import { PG_OWNER } from '../db/db.module';
+import { withTenant } from '../db/tenant-context';
 import { MailService } from '../mail/mail.service';
 import { AuthService } from './auth.service';
 import { passwordProblem } from './passwords';
@@ -24,7 +25,7 @@ export class PasswordResetService {
   private readonly logger = new Logger(PasswordResetService.name);
 
   constructor(
-    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(PG_OWNER) private readonly pool: Pool,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly mail: MailService,
     private readonly auth: AuthService,
@@ -44,11 +45,15 @@ export class PasswordResetService {
     await this.pool.query(`INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES ($1, $2, now() + make_interval(mins => $3))`, [u.id, hashToken(token), RESET_MINUTES]);
     const link = `${this.config.publicBaseUrl}/restablecer?token=${token}`;
     try {
-      await this.mail.send(u.tenant_id, {
-        to: email.trim(),
-        subject: 'Restablecer su contraseña',
-        text: `Hola ${u.name}:\n\nPara elegir una contraseña nueva abra este enlace (vale ${RESET_MINUTES} minutos y se usa una sola vez):\n\n${link}\n\nSi usted no lo pidió, ignore este correo: su contraseña no cambia.`,
-      });
+      // El correo sale por el SMTP de la corredora: se lee con la corredora del usuario fijada (el login no tiene contexto).
+      const tenantId = u.tenant_id;
+      await withTenant(tenantId, () =>
+        this.mail.send(tenantId, {
+          to: email.trim(),
+          subject: 'Restablecer su contraseña',
+          text: `Hola ${u.name}:\n\nPara elegir una contraseña nueva abra este enlace (vale ${RESET_MINUTES} minutos y se usa una sola vez):\n\n${link}\n\nSi usted no lo pidió, ignore este correo: su contraseña no cambia.`,
+        }),
+      );
     } catch (e) {
       // No se le dice a quien pide que falló: eso también delataría que la cuenta existe. Queda en el log.
       this.logger.warn(`No se pudo enviar el restablecimiento al usuario ${u.id}: ${(e as Error).message}`);

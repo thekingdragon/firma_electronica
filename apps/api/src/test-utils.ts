@@ -32,6 +32,10 @@ export async function resetDatabase(url: string): Promise<Pool> {
   await pool.query('TRUNCATE users CASCADE');
   // La llave de sello va cifrada con SECRETS_KEY y las pruebas usan una distinta cada vez: la anterior no serviría.
   await pool.query('TRUNCATE seal_keys');
+  // El rol de runtime (sujeto a RLS) con que corre la aplicación en las pruebas. Los roles son de todo el servidor: se crea
+  // una sola vez. En el servidor de pruebas (autenticación «trust») no lleva contraseña.
+  await pool.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'firma_runtime') THEN CREATE ROLE firma_runtime LOGIN; END IF; END $$`);
+  await pool.query("SELECT grant_runtime_access('firma_runtime')");
   return pool;
 }
 
@@ -44,6 +48,16 @@ export async function makeApp(env: Record<string, string>): Promise<INestApplica
   // El límite por IP se sube muchísimo: las pruebas hacen cientos de peticiones desde la misma
   // dirección. Solo las pruebas del propio limitador usan uno bajo.
   env = { BACKGROUND_JOBS: 'false', PUBLIC_RATE_LIMIT_PER_MIN: '100000', ...env };
+  // La aplicación corre como en producción: el runtime con el rol sujeto a RLS y el dueño aparte. TEST_APP_DATABASE_URL lo
+  // sobrescribe si el servidor de pruebas exige contraseña.
+  if (env.DATABASE_URL && !env.APP_DATABASE_URL) {
+    const u = new URL(process.env.TEST_APP_DATABASE_URL ?? env.DATABASE_URL);
+    if (!process.env.TEST_APP_DATABASE_URL) {
+      u.username = 'firma_runtime';
+      u.password = '';
+    }
+    env = { ...env, APP_DATABASE_URL: u.toString() };
+  }
   const saved: Record<string, string | undefined> = {};
   for (const [k, v] of Object.entries(env)) {
     saved[k] = process.env[k];

@@ -4,7 +4,7 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 import { ApiError } from '../common/api-error';
 import { RateLimitService } from '../common/rate-limit';
-import { PG_POOL } from '../db/db.module';
+import { PG_OWNER } from '../db/db.module';
 import { AccessGuard, AllowMustChange, CurrentUser } from './access.guard';
 import { AuthService, IssuedSession } from './auth.service';
 import { MfaService } from './mfa.service';
@@ -31,7 +31,7 @@ export function parseBody<T>(schema: z.ZodType<T>, body: unknown, message = 'Los
 @Controller('v1/auth')
 export class AuthController {
   constructor(
-    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(PG_OWNER) private readonly pool: Pool,
     private readonly auth: AuthService,
     private readonly mfa: MfaService,
     private readonly resets: PasswordResetService,

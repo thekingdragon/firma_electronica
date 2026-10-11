@@ -221,6 +221,9 @@ export function Operator() {
                 <li><Dot ok={s.sealKey} warn /> Llave de sello {s.sealKey ? 'creada' : '(se crea con la primera firma)'}</li>
                 <li><Dot ok={s.timestampAuthority} warn /> Sello de tiempo de un tercero {s.timestampAuthority ? 'activo' : 'sin configurar (TSA_URL)'}</li>
                 <li><Dot ok={s.backgroundJobs} /> Tareas en segundo plano</li>
+                <li>
+                  <Dot ok={s.rlsEnforced} warn /> Aislamiento entre corredoras en la base (RLS) {s.rlsEnforced ? 'activo' : `NO activo: ${s.rlsReason ?? 'sin detalle'}`}
+                </li>
               </ul>
             </div>
 

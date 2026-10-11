@@ -2,7 +2,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Pool } from 'pg';
 import { open, seal as sealSecret } from '../common/secret-box';
 import { APP_CONFIG, AppConfig } from '../config/config';
-import { PG_POOL } from '../db/db.module';
+import { PG_OWNER, PG_POOL } from '../db/db.module';
+import { withTenant } from '../db/tenant-context';
 import { StorageNotConfiguredError, StorageService } from '../storage/storage.service';
 import { SealKeyMaterial, SealMeta, certificateFingerprint, generateSealKey, sealPdf } from './seal';
 import { TsaError, requestTimestamp } from './tsa';
@@ -43,6 +44,8 @@ export class SealService {
 
   constructor(
     @Inject(PG_POOL) private readonly pool: Pool,
+    /** Solo para recorrer las firmas de TODAS las corredoras al reintentar sellos; cada sello se pide con su corredora fijada. */
+    @Inject(PG_OWNER) private readonly owner: Pool,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly storage: StorageService,
   ) {}
@@ -142,7 +145,7 @@ export class SealService {
    */
   async retryPending(limit = 20): Promise<number> {
     if (!this.config.tsaUrl) return 0;
-    const { rows } = await this.pool.query<{ id: string; tenant_id: string; pdf_sha256: string; tsa_attempts: number; age: number }>(
+    const { rows } = await this.owner.query<{ id: string; tenant_id: string; pdf_sha256: string; tsa_attempts: number; age: number }>(
       `SELECT id, tenant_id, pdf_sha256, tsa_attempts, extract(epoch FROM now() - signed_at)::int AS age
          FROM signature_requests
         WHERE status = 'SIGNED' AND tsa_path IS NULL AND pdf_sha256 IS NOT NULL AND tsa_attempts < $1
@@ -155,7 +158,7 @@ export class SealService {
       if (tried >= limit) break;
       if (r.age < dueAfterSeconds(r.tsa_attempts)) continue;
       tried++;
-      if (await this.stamp(r.id, r.tenant_id, r.pdf_sha256)) ok++;
+      if (await withTenant(r.tenant_id, () => this.stamp(r.id, r.tenant_id, r.pdf_sha256))) ok++;
     }
     return ok;
   }

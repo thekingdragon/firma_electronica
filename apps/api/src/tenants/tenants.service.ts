@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
 import { seal } from '../common/secret-box';
-import { PG_POOL } from '../db/db.module';
+import { PG_OWNER } from '../db/db.module';
 import { generateApiKey, hashApiKey, looksLikeApiKey } from './api-key';
 import { defaultTemplates } from './default-templates';
 
@@ -135,7 +135,7 @@ export async function setTenantWebhook(
 
 @Injectable()
 export class TenantsService {
-  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
+  constructor(@Inject(PG_OWNER) private readonly pool: Pool) {}
 
   async findById(id: string): Promise<Tenant | null> {
     const { rows } = await this.pool.query<TenantRow>(

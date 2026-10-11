@@ -4,7 +4,7 @@ import type { Request } from 'express';
 import { Pool } from 'pg';
 import { ApiError } from '../common/api-error';
 import { APP_CONFIG, AppConfig } from '../config/config';
-import { PG_POOL } from '../db/db.module';
+import { PG_OWNER } from '../db/db.module';
 import { Role, SessionUser, bearerToken, invalidSession, userFromAccessToken } from './session';
 
 export type UserRequest = Request & { user?: SessionUser };
@@ -21,7 +21,7 @@ export const AllowMustChange = () => SetMetadata(ALLOW_MUST_CHANGE_KEY, true);
 @Injectable()
 export class AccessGuard implements CanActivate {
   constructor(
-    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(PG_OWNER) private readonly pool: Pool,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly reflector: Reflector,
   ) {}

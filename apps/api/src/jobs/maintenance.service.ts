@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, OnApplicationShutdown, OnModuleInit } from '@nestjs/common';
 import { Pool } from 'pg';
 import { APP_CONFIG, AppConfig } from '../config/config';
-import { PG_POOL } from '../db/db.module';
+import { PG_OWNER } from '../db/db.module';
 import { SealService } from '../seal/seal.service';
 import { StorageService } from '../storage/storage.service';
 import { enqueueWebhook } from '../webhooks/outbox';
@@ -34,7 +34,7 @@ export class MaintenanceService implements OnModuleInit, OnApplicationShutdown {
   private inFlight = new Set<Promise<unknown>>();
 
   constructor(
-    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(PG_OWNER) private readonly pool: Pool,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly storage: StorageService,
     private readonly seal: SealService,

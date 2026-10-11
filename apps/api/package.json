@@ -10,6 +10,7 @@
     "start": "nest start",
     "start:prod": "node dist/main",
     "db:migrate": "ts-node src/db/migrate.ts",
+    "db:grant": "ts-node src/db/grant.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "tenant:create": "ts-node src/tenants/create-tenant.ts",

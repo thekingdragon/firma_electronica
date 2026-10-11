@@ -6,7 +6,7 @@ import * as QRCode from 'qrcode';
 import { ApiError } from '../common/api-error';
 import { open, seal } from '../common/secret-box';
 import { APP_CONFIG, AppConfig } from '../config/config';
-import { PG_POOL } from '../db/db.module';
+import { PG_OWNER } from '../db/db.module';
 import { AuthService, IssuedSession, mfaRequiredFor } from './auth.service';
 import { verifyPassword } from './passwords';
 import { formatSecretForHuman, generateSecret, otpauthUri, verifyTotp } from './totp';
@@ -35,7 +35,7 @@ export class MfaService {
   private readonly logger = new Logger(MfaService.name);
 
   constructor(
-    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(PG_OWNER) private readonly pool: Pool,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly auth: AuthService,
   ) {}

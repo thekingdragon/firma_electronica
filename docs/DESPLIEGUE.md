@@ -31,7 +31,21 @@ En el mismo servidor PostgreSQL de Polix, pero **base y rol aparte** (no reutili
 ```sql
 CREATE ROLE firma_app LOGIN PASSWORD '<clave larga y aleatoria>';
 CREATE DATABASE firma_electronica OWNER firma_app;
+-- Rol de RUNTIME (aislamiento entre corredoras, ver ARQUITECTURA §6.2): sin BYPASSRLS ni superusuario.
+CREATE ROLE firma_runtime LOGIN PASSWORD '<otra clave larga y aleatoria>';
 ```
+
+`firma_app` (el dueño, `DATABASE_URL`) hace las migraciones, el login, el panel de operador y las tareas en segundo
+plano. **`firma_runtime` (`APP_DATABASE_URL`) es con el que corren las corredoras**, sujeto a Row-Level Security: solo
+ve las filas de la corredora de cada petición y no toca las tablas de usuarios ni de sesiones. Tras migrar:
+
+```
+npm run db:migrate -w api
+npm run db:grant -w api      # concede a firma_runtime solo lo que necesita (repetir si una migración agrega tablas)
+```
+
+Sin `APP_DATABASE_URL` la API corre con el dueño, **el aislamiento no está activo** y el arranque y el panel de operador
+lo avisan (no se detiene, para no tumbar un despliegue existente).
 
 ## 2. Código y variables
 
@@ -230,8 +244,9 @@ npm run operator:reset  -w api -- --email ana@empresa.com [--mfa]   (perdió la 
   otra llave en silencio: restaure la clave correcta.
 - **Rotar `TOKEN_SECRET`:** invalida los enlaces de las solicitudes pendientes. Hágalo sin solicitudes
   vivas.
-- **El servicio no tiene RLS entre tenants** (ver ARQUITECTURA §13). Con una sola corredora de confianza
-  no es un riesgo práctico; antes de alojar corredoras que no se conozcan entre sí, hay que cerrarlo.
+- **Aislamiento entre corredoras (RLS):** activo si `APP_DATABASE_URL` usa el rol `firma_runtime` (ver §1). El panel
+  de operador muestra si lo está. Una tabla nueva queda **inaccesible** para el runtime hasta agregarla a
+  `grant_runtime_access` (lista blanca) y correr `db:grant`: falla cerrado, no abierto.
 
 ## 10. Exposición del panel
 

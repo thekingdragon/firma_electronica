@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
 import { ApiError } from '../common/api-error';
 import { APP_CONFIG, AppConfig } from '../config/config';
-import { PG_POOL } from '../db/db.module';
+import { PG_OWNER } from '../db/db.module';
 import { dummyHash, hashPassword, passwordProblem, verifyPassword } from './passwords';
 import { SessionUser, USER_COLUMNS, toSessionUser } from './session';
 import { ACCESS_MINUTES, PENDING_MINUTES, hashToken, newOpaqueToken, signToken } from './tokens';
@@ -48,7 +48,7 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
-    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(PG_OWNER) private readonly pool: Pool,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 

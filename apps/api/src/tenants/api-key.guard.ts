@@ -12,7 +12,7 @@ import { Pool } from 'pg';
 import { enforce } from '../auth/access.guard';
 import { SessionUser, bearerToken, invalidSession, userFromAccessToken } from '../auth/session';
 import { APP_CONFIG, AppConfig } from '../config/config';
-import { PG_POOL } from '../db/db.module';
+import { PG_OWNER } from '../db/db.module';
 import { ApiError } from '../common/api-error';
 import { RateLimitService } from '../common/rate-limit';
 import { Tenant, TenantsService } from './tenants.service';
@@ -26,7 +26,7 @@ export class ApiKeyGuard implements CanActivate {
   constructor(
     private readonly tenants: TenantsService,
     private readonly limits: RateLimitService,
-    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(PG_OWNER) private readonly pool: Pool,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly reflector: Reflector,
   ) {}

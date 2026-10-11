@@ -3,7 +3,7 @@ import { access, constants } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { ApiError } from '../common/api-error';
 import { APP_CONFIG, AppConfig } from '../config/config';
-import { PG_POOL } from '../db/db.module';
+import { DB_ISOLATION, DbIsolationService, PG_OWNER } from '../db/db.module';
 import { verifyAll } from '../ops/verify-evidence';
 import { MAX_TSA_ATTEMPTS as MAX_ATTEMPTS } from '../seal/seal.service';
 import { StorageService } from '../storage/storage.service';
@@ -18,6 +18,9 @@ export interface OperatorOverview {
     sealKey: boolean;
     timestampAuthority: boolean;
     backgroundJobs: boolean;
+    /** El runtime corre con un rol sujeto a RLS (aislamiento entre corredoras en la base). */
+    rlsEnforced: boolean;
+    rlsReason: string | null;
   };
   totals: {
     tenants: number;
@@ -52,9 +55,10 @@ export interface OperatorTenant {
 @Injectable()
 export class OperatorService {
   constructor(
-    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(PG_OWNER) private readonly pool: Pool,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly storage: StorageService,
+    @Inject(DB_ISOLATION) private readonly isolation: DbIsolationService,
   ) {}
 
   async overview(): Promise<OperatorOverview> {
@@ -88,6 +92,7 @@ export class OperatorService {
         // Sin TSA_URL no se pide el sello de tiempo; los «pendientes» solo cuentan si hay autoridad configurada.
         timestampAuthority: this.config.tsaUrl !== null,
         backgroundJobs: this.config.backgroundJobs,
+        ...(await this.isolation.refresh().then((s) => ({ rlsEnforced: s.rlsEnforced, rlsReason: s.reason }))),
       },
       totals: {
         tenants: Number(tenants.total),
