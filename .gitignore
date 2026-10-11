@@ -10,3 +10,4 @@ dist/
 *.dump
 /backups/
 /apps/*/backups/
+/.*.log

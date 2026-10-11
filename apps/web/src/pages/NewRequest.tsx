@@ -52,7 +52,6 @@ function faltas(f: Form): Partial<Record<keyof Form, string>> {
 }
 
 export function NewRequest() {
-  const { apiKey } = useSession();
   const [form, setForm] = useState<Form>(EMPTY);
   const [shown, setShown] = useState<Partial<Record<keyof Form, string>>>({});
   const [serverError, setServerError] = useState<string | null>(null);
@@ -86,7 +85,7 @@ export function NewRequest() {
     setBusy(true);
     setServerError(null);
     try {
-      const result = await api.create(apiKey, body, idempotencyKey.current);
+      const result = await api.create(body, idempotencyKey.current);
       setCreated({ result, signerName: body.signer.name, phone: form.phone });
     } catch (err) {
       if (err instanceof ApiRequestError && err.issues.length) {

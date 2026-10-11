@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { api, ApiRequestError, loadReviewer, saveReviewer, type Evidence, type ReviewResult } from '../api';
+import { api, ApiRequestError, type Evidence, type ReviewResult } from '../api';
 import { useSession } from '../auth';
 import { EVENT_LABEL, REVIEW_LABEL, formatDateTime, formatDateTimeSeconds, saveBlob } from '../format';
 import { ReviewBadge } from './StatusBadge';
@@ -99,7 +99,6 @@ export function EvidencePanel({
   /** Se llama al guardar un dictamen, para que la pantalla que lo contiene refresque su encabezado. */
   onReviewed?: () => void;
 }) {
-  const { apiKey } = useSession();
   const [ev, setEv] = useState<Evidence | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -108,10 +107,10 @@ export function EvidencePanel({
 
   const load = useCallback(() => {
     api
-      .evidence(apiKey, requestId)
+      .evidence(requestId)
       .then(setEv)
       .catch((e: Error) => setError(e.message));
-  }, [apiKey, requestId]);
+  }, [requestId]);
 
   useEffect(load, [load]);
 
@@ -120,7 +119,7 @@ export function EvidencePanel({
     setPkgBusy(true);
     setPdfError(null);
     try {
-      saveBlob(await api.evidencePackage(apiKey, requestId), `${ev.reference}-evidencia.zip`);
+      saveBlob(await api.evidencePackage(requestId), `${ev.reference}-evidencia.zip`);
     } catch (e) {
       setPdfError(e instanceof Error ? e.message : 'No se pudo descargar el paquete.');
     } finally {
@@ -133,7 +132,7 @@ export function EvidencePanel({
     setPdfBusy(true);
     setPdfError(null);
     try {
-      saveBlob(await api.document(apiKey, requestId), `${ev.reference}.pdf`);
+      saveBlob(await api.document(requestId), `${ev.reference}.pdf`);
     } catch (e) {
       setPdfError(e instanceof Error ? e.message : 'No se pudo descargar el PDF.');
     } finally {
@@ -215,7 +214,7 @@ export function EvidencePanel({
             <p className="checklist-title">Selfie con el número</p>
             <EvidencePhoto
               info={ev.photo}
-              fetchPhoto={() => api.photo(apiKey, requestId)}
+              fetchPhoto={() => api.photo(requestId)}
               alt={`Selfie de verificación de ${signerName}`}
               emptyMessage="Este documento no pidió fotografía."
             />
@@ -224,7 +223,7 @@ export function EvidencePanel({
             <p className="checklist-title">Documento de identidad (frente)</p>
             <EvidencePhoto
               info={ev.idPhoto}
-              fetchPhoto={() => api.idPhoto(apiKey, requestId)}
+              fetchPhoto={() => api.idPhoto(requestId)}
               alt={`Documento de identidad de ${signerName}`}
               emptyMessage="Esta firma no tiene foto del documento: se hizo antes de que se pidiera."
             />
@@ -234,7 +233,7 @@ export function EvidencePanel({
               <p className="checklist-title">Documento de identidad (reverso)</p>
               <EvidencePhoto
                 info={ev.idPhotoBack}
-                fetchPhoto={() => api.idPhotoBack(apiKey, requestId)}
+                fetchPhoto={() => api.idPhotoBack(requestId)}
                 alt={`Reverso del documento de identidad de ${signerName}`}
                 emptyMessage="No hay foto del reverso."
               />
@@ -351,27 +350,25 @@ export function EvidencePanel({
 }
 
 function ReviewForm({ requestId, current, onSaved }: { requestId: string; current: Evidence['review']; onSaved: () => void }) {
-  const { apiKey } = useSession();
-  const [reviewer, setReviewer] = useState(loadReviewer());
+  // Quien dictamina es quien entró: el servidor lo registra con su nombre y correo, no con un texto escrito a mano.
+  const { user } = useSession();
   const [result, setResult] = useState<ReviewResult | ''>('');
   const [note, setNote] = useState('');
-  const [shown, setShown] = useState<{ reviewer?: string; result?: string }>({});
+  const [shown, setShown] = useState<{ result?: string }>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    const missing: { reviewer?: string; result?: string } = {};
-    if (reviewer.trim().length < 2) missing.reviewer = 'Escriba su nombre: queda registrado con la revisión.';
+    const missing: { result?: string } = {};
     if (!result) missing.result = 'Elija si la identidad queda verificada o rechazada.';
     setShown(missing);
     if (Object.keys(missing).length || !result) return;
     setBusy(true);
     setError(null);
     try {
-      await api.review(apiKey, requestId, { result, reviewedBy: reviewer.trim(), ...(note.trim() ? { note: note.trim() } : {}) });
-      saveReviewer(reviewer.trim());
+      await api.review(requestId, { result, reviewedBy: user.name, ...(note.trim() ? { note: note.trim() } : {}) });
       setEditing(false);
       setResult('');
       setNote('');
@@ -396,9 +393,7 @@ function ReviewForm({ requestId, current, onSaved }: { requestId: string; curren
   return (
     <form className="review-form" onSubmit={submit} noValidate>
       <h3>{current ? 'Cambiar el dictamen' : 'Su dictamen'}</h3>
-      <label htmlFor="reviewer">Su nombre *</label>
-      <input id="reviewer" value={reviewer} className={shown.reviewer ? 'invalid' : ''} onChange={(e) => { setReviewer(e.target.value); setShown((s) => ({ ...s, reviewer: undefined })); }} />
-      {shown.reviewer && <p className="error">{shown.reviewer}</p>}
+      <p className="hint">Queda registrado a nombre de <strong>{user.name}</strong> ({user.email}).</p>
 
       <fieldset className={`choice${shown.result ? ' invalid' : ''}`}>
         <legend>Resultado *</legend>

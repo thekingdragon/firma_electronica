@@ -137,6 +137,14 @@ export async function setTenantWebhook(
 export class TenantsService {
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
 
+  async findById(id: string): Promise<Tenant | null> {
+    const { rows } = await this.pool.query<TenantRow>(
+      `SELECT id, name, country, legal_name, registry_code, webhook_url FROM tenants WHERE id = $1 AND active`,
+      [id],
+    );
+    return rows[0] ? toTenant(rows[0]) : null;
+  }
+
   /** Devuelve el tenant activo dueño de esa clave, o null. No distingue «no existe» de «inactivo». */
   async findByApiKey(apiKey: string): Promise<Tenant | null> {
     if (!looksLikeApiKey(apiKey)) return null;

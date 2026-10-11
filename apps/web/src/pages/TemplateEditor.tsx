@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ApiRequestError, api, loadReviewer, saveReviewer, type TemplateDetail, type TemplatePolicy } from '../api';
+import { ApiRequestError, api, type TemplateDetail, type TemplatePolicy } from '../api';
 import { useSession } from '../auth';
 import { cleanBlocks, localProblems, type Block } from '../blocks';
 import { BlockEditor } from '../components/BlockEditor';
@@ -30,12 +30,13 @@ function describe(e: unknown): { message: string; issues: string[] } {
 
 export function TemplateEditor() {
   const { type = '' } = useParams();
-  const { apiKey } = useSession();
   const [detail, setDetail] = useState<TemplateDetail | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [baseline, setBaseline] = useState('');
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [by, setBy] = useState(loadReviewer());
+  // Quien publica es quien entró: queda registrado con su nombre, sin teclearlo.
+  const { user } = useSession();
+  const by = user.name;
   const [busy, setBusy] = useState<'preview' | 'publish' | null>(null);
   const [problem, setProblem] = useState<{ message: string; issues: string[] } | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -44,7 +45,7 @@ export function TemplateEditor() {
   const load = useCallback(() => {
     setLoadError(null);
     api
-      .template(apiKey, type)
+      .template(type)
       .then((d) => {
         setDetail(d);
         const dr = draftOf(d);
@@ -53,7 +54,7 @@ export function TemplateEditor() {
         setFromVersion(null);
       })
       .catch((e: Error) => setLoadError(e.message));
-  }, [apiKey, type]);
+  }, [type]);
 
   useEffect(load, [load]);
 
@@ -105,7 +106,7 @@ export function TemplateEditor() {
     // La ventana se abre YA, dentro del clic: si se abriera después de esperar al servidor, el navegador la bloquearía.
     const w = window.open('', '_blank');
     try {
-      const blob = await api.previewTemplate(apiKey, type, body());
+      const blob = await api.previewTemplate(type, body());
       const url = URL.createObjectURL(blob);
       if (w) w.location.href = url;
       else window.location.href = url;
@@ -124,10 +125,6 @@ export function TemplateEditor() {
       setProblem({ message: 'Hay cosas por corregir antes de publicar.', issues: local });
       return;
     }
-    if (by.trim().length < 2) {
-      setProblem({ message: 'Escriba su nombre: queda registrado como quien publicó esta versión.', issues: [] });
-      return;
-    }
     const next = detail.versions.reduce((m, v) => Math.max(m, v.version), 0) + 1;
     const ok = window.confirm(
       `Se publicará la versión ${next} y quedará activa.\n\nLas solicitudes que se creen desde ahora usarán este texto. Las que ya se enviaron conservan el suyo.\n\n¿Publicar?`,
@@ -136,8 +133,7 @@ export function TemplateEditor() {
     setProblem(null);
     setBusy('publish');
     try {
-      saveReviewer(by.trim());
-      const r = await api.publishTemplate(apiKey, type, { ...body(), policy: draft.policy, legalReviewed: draft.legalReviewed, publishedBy: by.trim() });
+      const r = await api.publishTemplate(type, { ...body(), policy: draft.policy, legalReviewed: draft.legalReviewed, publishedBy: by.trim() });
       setDone(`Versión ${r.version} publicada y activa.`);
       load();
     } catch (e) {
@@ -151,7 +147,7 @@ export function TemplateEditor() {
     if (dirty && !window.confirm('Tiene cambios sin publicar. Si carga otra versión, se pierden. ¿Continuar?')) return;
     setProblem(null);
     try {
-      const d = await api.template(apiKey, type, v);
+      const d = await api.template(type, v);
       setDraft(draftOf(d));
       setFromVersion(v);
       setDone(null);
@@ -258,8 +254,7 @@ export function TemplateEditor() {
           <input type="checkbox" checked={draft.legalReviewed} onChange={(e) => set({ legalReviewed: e.target.checked })} />
           <span>Confirmo que este texto fue revisado por el área legal de la corredora</span>
         </label>
-        <label htmlFor="by">Su nombre (queda registrado)</label>
-        <input id="by" type="text" maxLength={120} value={by} onChange={(e) => setBy(e.target.value)} />
+        <p className="hint">Queda registrado como publicada por <strong>{by}</strong>.</p>
 
         {local.length > 0 && (
           <ul className="issues">

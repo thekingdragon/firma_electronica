@@ -182,15 +182,34 @@ tratan como fallo.
 
 ## 9. Operación
 
+- **Usuarios y acceso al panel.** El panel entra con **correo y contraseña** (no con la clave de API). Roles:
+  `ADMIN` (todo en su corredora, incluido gestionar personas), `REVIEWER` (consulta y dictamina la identidad; no crea
+  solicitudes ni toca plantillas o ajustes) y `OPERATOR` (administra la plataforma, sin corredora propia). La clave de
+  API de la corredora queda **solo para la integración del host** (crear solicitudes máquina a máquina) y no gestiona
+  personas. Sesión: access token de 15 min en memoria + cookie de refresh HttpOnly de 7 días que se rota; reusar un
+  refresh ya reemplazado cierra la sesión entera. Cambiar la contraseña, dar de baja o cambiar el rol cortan las
+  sesiones al instante. Segundo factor (TOTP, con 10 códigos de recuperación): opcional, **obligatorio para el
+  operador**. Cuentas: 10 fallos de contraseña la cierran 5 min; 5 fallos del código, 15 min. Recuperación por correo
+  (enlace de un uso, 60 min) sale por el SMTP de la corredora; **el operador no tiene correo desde el cual recibirlo**.
+- **Crear el primer operador** (en esta máquina; la contraseña provisional se imprime una vez y debe cambiarse, y el
+  segundo factor se activa al entrar):
+
+```
+npm run operator:create -w api -- --email ana@empresa.com --name "Ana Pérez"
+npm run operator:reset  -w api -- --email ana@empresa.com [--mfa]   (perdió la contraseña, o el teléfono con --mfa)
+```
+
 - **Panel de operador** (`/operador`): lo usa quien administra el servicio entero, no una corredora. Muestra el
   estado (base, carpeta de archivos, `SECRETS_KEY`, llave de sello, sello de tiempo), los totales de todas las
   corredoras, sus alertas (correo con error, webhooks fallidos, sellos de tiempo pendientes, firmas por revisar),
-  permite **dar de alta** una corredora (la clave de API se muestra una sola vez), **activar/desactivar** una
-  (desactivada, su clave deja de funcionar) y **verificar sus últimas 100 firmas**. Se habilita definiendo
-  `OPERATOR_KEY` (mínimo 32 caracteres; sin ella el panel no existe). **Por defecto no se abre por el túnel de
-  Cloudflare**: solo desde esta máquina o la red local; `OPERATOR_ALLOW_REMOTE=true` lo abre a Internet y solo
-  conviene si esa clave es larga y se guarda como un secreto. Las altas y desactivaciones quedan en el log del
-  servicio, no en una bitácora de base de datos.
+  permite **dar de alta** una corredora con su primer administrador (clave de API y contraseña provisional se muestran
+  una sola vez), **agregar un administrador** a una que se quedó sin acceso, **activar/desactivar** una (desactivada,
+  sus usuarios y su clave dejan de funcionar) y **verificar sus últimas 100 firmas**. **Por defecto no se abre por el
+  túnel de Cloudflare** (ni el login del operador): solo desde esta máquina o la red local;
+  `OPERATOR_ALLOW_REMOTE=true` lo abre a Internet. Las altas y desactivaciones quedan en el log del servicio, no en una
+  bitácora de base de datos.
+- **Rotar `TOKEN_SECRET` también cierra todas las sesiones** del panel (firma los access token), además de invalidar
+  los enlaces pendientes.
 
 - **Estado de los avisos al host:** tabla `webhook_deliveries` (`delivered_at`, `failed_at`, `last_error`).
 - **Correo:** `tenant_mail_settings.last_error` guarda el último fallo de envío, ya explicado.

@@ -145,6 +145,28 @@ en la base de datos:
 1–3): vale como manifestación de voluntad, pero quien la impugne podrá exigir probar la identidad, y por
 eso existen la revisión y el paquete. No equivale a firma digital con certificado de una ECEP.
 
+### 6.2 Usuarios, sesiones y segundo factor del panel
+
+Patrón tomado de `gestor_segurov3` (Polix), reescrito con `pg` plano: `users` (rol `OPERATOR`/`ADMIN`/`REVIEWER`, el
+operador sin `tenant_id`, forzado por `CHECK`), `refresh_tokens` con familia y revocación con motivo, `mfa_recovery_codes`
+y `password_resets` (migración 0011). Lo que se copió tal cual: el TOTP (`auth/totp.ts`, contrastado con los vectores de
+los RFC). Lo que se conservó como decisión: el testigo intermedio del segundo factor usa **otra clave** que el access
+token (si no, «contraseña correcta» valdría como sesión), cinco fallos del código cierran el factor 15 min, los códigos
+de recuperación son de un uso y el restablecimiento no se salta el segundo factor.
+
+- **Access token** JWT HS256 a mano (`auth/tokens.ts`), 15 min, con la **versión de sesión** del usuario: subirla (cambio
+  de contraseña, baja, cambio de rol, quitar el factor) invalida al instante todos sus tokens. Es un contador y no una
+  hora a propósito: comparar relojes de dos procesos falló en Windows (`Date.now()` va hasta ~15 ms por detrás).
+- **Refresh** opaco, solo su hash en la base, cookie HttpOnly + SameSite=Strict en `/v1/auth`. Rota en cada renovación;
+  un token ya reemplazado hace más de 20 s se presume robado y cae toda la familia. **Simplificación respecto a Polix:**
+  no hay el endpoint de confirmación de recepción del token nuevo; la gracia de 20 s cubre dos pestañas, pero una
+  respuesta que se pierda por más tiempo obliga a volver a entrar.
+- **Guardas:** `ApiKeyGuard` acepta sesión (Bearer) **o** clave de API (integración, equivale a ADMIN de su corredora);
+  `@Roles('ADMIN')` marca crear/revocar solicitudes, plantillas y ajustes; `AccessGuard` es solo sesión; `OperatorGuard`
+  exige rol OPERATOR. Quien dictamina una identidad queda registrado con su nombre y correo de la sesión.
+- **Fuera de alcance por ahora:** bitácora de inicios de sesión en base de datos (solo log del servicio), lista de
+  dispositivos/sesiones activas, y los correos de aviso («iniciaron sesión desde…»).
+
 ## 7. Seguridad y datos personales
 
 - Link con token de 256 bits derivado por HMAC del id (no se guarda: en base queda su hash); vence
@@ -323,10 +345,9 @@ un SMTP real— más un recorrido manual completo en el navegador montado como e
   «anterior al sello de integridad».
 - **Respaldo:** `npm run backup` copia base y archivos con manifiesto, pero **no** `SECRETS_KEY` ni lo
   lleva fuera de la máquina; eso es responsabilidad de quien opera (DESPLIEGUE §8).
-- **El panel entra con la clave de API del tenant** (sin usuarios ni contraseñas ni roles). La clave
-  tiene 256 bits y los intentos fallidos se limitan, pero quien la tenga controla el tenant y queda en
-  el `localStorage` del navegador. El «nombre de quien revisa» se escribe a mano: la bitácora no puede
-  probar quién fue.
+- **El panel ya no entra con la clave de API** (§6.2): usuarios con rol, sesión corta con refresh en cookie HttpOnly y
+  segundo factor. La clave de API del tenant queda solo para la integración del host. Pendiente: bitácora de inicios de
+  sesión en la base y confirmación de recepción del refresh.
 - **Los límites por IP son por proceso y en memoria** (se pierden al reiniciar; con varias instancias,
   cada una cuenta lo suyo). Dependen de `TRUST_PROXY`: mal puesto, todos los firmantes comparten un cupo.
 - **Los webhooks fallidos no tienen pantalla**: tras ~23 h y 9 intentos se marcan `failed_at` en

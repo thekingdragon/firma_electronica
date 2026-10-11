@@ -8,17 +8,16 @@ import { ReviewBadge, StatusBadge } from '../components/StatusBadge';
 import { DOCUMENT_TYPE_LABEL, formatDateTime, isPast } from '../format';
 
 export function RequestDetail() {
-  const { apiKey } = useSession();
   const { id = '' } = useParams();
   const [req, setReq] = useState<SignatureRequest | null>(null);
   const [error, setError] = useState<{ notFound: boolean; message: string } | null>(null);
 
   const load = useCallback(() => {
     api
-      .get(apiKey, id)
+      .get(id)
       .then(setReq)
       .catch((e: Error) => setError({ notFound: e instanceof ApiRequestError && e.status === 404, message: e.message }));
-  }, [apiKey, id]);
+  }, [id]);
 
   useEffect(() => {
     setReq(null);
@@ -105,7 +104,6 @@ export function RequestDetail() {
 
 /** Revocar pide confirmación: es irreversible (el enlace deja de abrir y la solicitud no se reabre). */
 function RevokeCard({ requestId, onRevoked }: { requestId: string; onRevoked: () => void }) {
-  const { apiKey } = useSession();
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +112,7 @@ function RevokeCard({ requestId, onRevoked }: { requestId: string; onRevoked: ()
     setBusy(true);
     setError(null);
     try {
-      await api.revoke(apiKey, requestId);
+      await api.revoke(requestId);
       onRevoked();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo revocar.');

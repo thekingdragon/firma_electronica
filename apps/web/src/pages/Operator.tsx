@@ -1,141 +1,14 @@
 import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import { NavLink } from 'react-router-dom';
+import { ApiRequestError, operatorApi, type CreatedTenant, type OperatorOverview, type OperatorTenant, type VerifyResult } from '../api';
+import { useAuth, useSession } from '../auth';
 import { formatDateTime } from '../format';
 
 /**
- * Panel de OPERADOR: quien administra el servicio entero, por encima de cada corredora. Usa su propia clave
- * (X-Operator-Key), distinta de la clave de API de un tenant, y la guarda solo mientras la pestaña esté abierta.
+ * Panel de OPERADOR: quien administra el servicio entero, por encima de cada corredora. Entra con su usuario (rol
+ * OPERATOR, segundo factor obligatorio) por el mismo login que los demás.
  */
-const STORAGE = 'fes.operatorKey';
-
-interface Overview {
-  service: { database: boolean; storageWritable: boolean; secretsKey: boolean; sealKey: boolean; timestampAuthority: boolean; backgroundJobs: boolean };
-  totals: {
-    tenants: number;
-    activeTenants: number;
-    requests: Record<string, number>;
-    signedLast30Days: number;
-    timestampsPending: number;
-    timestampsGivenUp: number;
-    webhooksFailed: number;
-    webhooksPending: number;
-    mailWithErrors: number;
-  };
-}
-interface TenantRow {
-  id: string;
-  name: string;
-  legalName: string;
-  country: string;
-  active: boolean;
-  createdAt: string;
-  mailConfigured: boolean;
-  mailLastError: string | null;
-  signed: number;
-  pending: number;
-  lastSignedAt: string | null;
-  timestampsPending: number;
-  webhooksFailed: number;
-  reviewPending: number;
-}
-interface VerifyResult {
-  checked: number;
-  ok: number;
-  unsealed: number;
-  failed: { requestId: string; reference: string; problems: string[] }[];
-}
-interface Created {
-  tenant: { id: string; name: string };
-  apiKey: string;
-  webhookSecret: string | null;
-}
-
-class OpError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-async function op<T>(key: string, method: string, path: string, body?: unknown): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(`/v1/operator${path}`, {
-      method,
-      headers: { 'X-Operator-Key': key, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-  } catch {
-    throw new OpError(0, 'No se pudo conectar con el servicio.');
-  }
-  const json = await res.json().catch(() => null);
-  if (!res.ok) {
-    const detalle = Array.isArray(json?.issues) && json.issues.length ? ` (${json.issues.map((i: { message: string }) => i.message).join('; ')})` : '';
-    throw new OpError(res.status, `${json?.message ?? `Error ${res.status}`}${detalle}`);
-  }
-  return json as T;
-}
-
-function loadKey(): string | null {
-  try {
-    return sessionStorage.getItem(STORAGE);
-  } catch {
-    return null;
-  }
-}
-function saveKey(k: string | null) {
-  try {
-    if (k) sessionStorage.setItem(STORAGE, k);
-    else sessionStorage.removeItem(STORAGE);
-  } catch {
-    /* sin almacenamiento: dura lo que dure la pestaña */
-  }
-}
-
-function Login({ onKey }: { onKey: (k: string) => void }) {
-  const [key, setKey] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!key.trim()) return setError('Ingrese la clave de operador.');
-    setBusy(true);
-    setError(null);
-    try {
-      await op<Overview>(key.trim(), 'GET', '/overview');
-      saveKey(key.trim());
-      onKey(key.trim());
-    } catch (err) {
-      setError(
-        err instanceof OpError && err.status === 404
-          ? 'El panel de operador no está habilitado en este servidor (o solo se abre desde la máquina del servicio).'
-          : err instanceof Error
-            ? err.message
-            : 'No se pudo conectar.',
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <main className="container narrow">
-      <h1>Panel de operador</h1>
-      <p className="lead">Administración del servicio completo. No es el panel de una corredora.</p>
-      <form className="card" onSubmit={submit} noValidate>
-        <label htmlFor="opkey">Clave de operador *</label>
-        <input id="opkey" type="password" autoComplete="off" spellCheck={false} value={key} onChange={(e) => setKey(e.target.value)} className={error ? 'invalid' : ''} />
-        {error && <p className="error" role="alert">{error}</p>}
-        <p className="hint">Es la variable <code>OPERATOR_KEY</code> del servidor.</p>
-        <button className="btn btn-primary" type="submit" disabled={busy}>
-          {busy ? 'Conectando…' : 'Entrar'}
-        </button>
-      </form>
-    </main>
-  );
-}
+const message = (e: unknown, fallback: string) => (e instanceof ApiRequestError || e instanceof Error ? e.message : fallback);
 
 const Dot = ({ ok, warn }: { ok: boolean; warn?: boolean }) => <span className={`dot ${ok ? 'dot-ok' : warn ? 'dot-warn' : 'dot-bad'}`} aria-hidden="true" />;
 
@@ -148,23 +21,29 @@ function Stat({ label, value, bad }: { label: string; value: number | string; ba
   );
 }
 
-function NewTenant({ opKey, onCreated }: { opKey: string; onCreated: () => void }) {
-  const [form, setForm] = useState({ name: '', legalName: '', country: 'PE', registryCode: '' });
+function NewTenant({ onCreated }: { onCreated: () => void }) {
+  const [form, setForm] = useState({ name: '', legalName: '', country: 'PE', registryCode: '', adminEmail: '', adminName: '' });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [created, setCreated] = useState<Created | null>(null);
+  const [created, setCreated] = useState<CreatedTenant | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const body = { name: form.name, legalName: form.legalName, country: form.country, ...(form.registryCode.trim() ? { registryCode: form.registryCode.trim() } : {}) };
-      setCreated(await op<Created>(opKey, 'POST', '/tenants', body));
-      setForm({ name: '', legalName: '', country: 'PE', registryCode: '' });
+      const body = {
+        name: form.name,
+        legalName: form.legalName,
+        country: form.country,
+        ...(form.registryCode.trim() ? { registryCode: form.registryCode.trim() } : {}),
+        ...(form.adminEmail.trim() ? { adminEmail: form.adminEmail.trim(), adminName: form.adminName.trim() } : {}),
+      };
+      setCreated(await operatorApi.createTenant(body));
+      setForm({ name: '', legalName: '', country: 'PE', registryCode: '', adminEmail: '', adminName: '' });
       onCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo crear.');
+      setError(message(err, 'No se pudo crear.'));
     } finally {
       setBusy(false);
     }
@@ -192,6 +71,14 @@ function NewTenant({ opKey, onCreated }: { opKey: string; onCreated: () => void 
             <label htmlFor="n-reg">Código de registro</label>
             <input id="n-reg" value={form.registryCode} onChange={set('registryCode')} />
           </div>
+          <div>
+            <label htmlFor="n-admin-name">Primer administrador: nombre</label>
+            <input id="n-admin-name" value={form.adminName} onChange={set('adminName')} />
+          </div>
+          <div>
+            <label htmlFor="n-admin-email">Primer administrador: correo</label>
+            <input id="n-admin-email" type="email" value={form.adminEmail} onChange={set('adminEmail')} />
+          </div>
         </div>
         {error && <p className="error" role="alert">{error}</p>}
         <button className="btn btn-primary" type="submit" disabled={busy}>
@@ -201,16 +88,24 @@ function NewTenant({ opKey, onCreated }: { opKey: string; onCreated: () => void 
       {created && (
         <div className="notice" role="status">
           <p>
-            <strong>{created.tenant.name}</strong> creada. Entregue esta clave a la corredora; <strong>no se vuelve a mostrar</strong>:
+            <strong>{created.tenant.name}</strong> creada. Entregue estos datos; <strong>no se vuelven a mostrar</strong>:
           </p>
-          <code className="secret">{created.apiKey}</code>
+          {created.admin && (
+            <p>
+              Administrador <strong>{created.admin.email}</strong>, contraseña provisional (deberá cambiarla al entrar):
+              <code className="secret">{created.admin.temporaryPassword}</code>
+            </p>
+          )}
+          <p>
+            Clave de API para la integración del host (sistema a sistema, no para el panel): <code className="secret">{created.apiKey}</code>
+          </p>
           {created.webhookSecret && (
             <p>
               Secreto del webhook: <code className="secret">{created.webhookSecret}</code>
             </p>
           )}
           <button type="button" className="btn btn-ghost" onClick={() => setCreated(null)}>
-            Ya la copié
+            Ya los copié
           </button>
         </div>
       )}
@@ -219,57 +114,62 @@ function NewTenant({ opKey, onCreated }: { opKey: string; onCreated: () => void 
 }
 
 export function Operator() {
-  const [key, setKey] = useState<string | null>(loadKey);
-  const [overview, setOverview] = useState<Overview | null>(null);
-  const [tenants, setTenants] = useState<TenantRow[]>([]);
+  const { user } = useSession();
+  const { disconnect } = useAuth();
+  const [overview, setOverview] = useState<OperatorOverview | null>(null);
+  const [tenants, setTenants] = useState<OperatorTenant[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, VerifyResult>>({});
-
-  const logout = useCallback(() => {
-    saveKey(null);
-    setKey(null);
-    setOverview(null);
-  }, []);
+  const [temp, setTemp] = useState<{ who: string; password: string } | null>(null);
 
   const load = useCallback(async () => {
-    if (!key) return;
     try {
-      const [o, t] = await Promise.all([op<Overview>(key, 'GET', '/overview'), op<{ tenants: TenantRow[] }>(key, 'GET', '/tenants')]);
+      const [o, t] = await Promise.all([operatorApi.overview(), operatorApi.tenants()]);
       setOverview(o);
-      setTenants(t.tenants);
+      setTenants(t);
       setError(null);
     } catch (err) {
-      if (err instanceof OpError && (err.status === 401 || err.status === 404)) logout();
-      else setError(err instanceof Error ? err.message : 'No se pudo cargar.');
+      setError(message(err, 'No se pudo cargar.'));
     }
-  }, [key, logout]);
+  }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  if (!key) return <Login onKey={setKey} />;
-
-  async function toggle(t: TenantRow) {
-    if (t.active && !window.confirm(`¿Desactivar a ${t.name}? Su clave de API dejará de funcionar de inmediato.`)) return;
+  async function toggle(t: OperatorTenant) {
+    if (t.active && !window.confirm(`¿Desactivar a ${t.name}? Sus usuarios y su clave de API dejarán de funcionar de inmediato.`)) return;
     try {
-      await op(key as string, 'POST', `/tenants/${t.id}/active`, { active: !t.active });
+      await operatorApi.setActive(t.id, !t.active);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo cambiar.');
+      setError(message(err, 'No se pudo cambiar.'));
     }
   }
 
-  async function verify(t: TenantRow) {
+  async function verify(t: OperatorTenant) {
     setVerifying(t.id);
     try {
-      const r = await op<VerifyResult>(key as string, 'POST', `/tenants/${t.id}/verify`);
+      const r = await operatorApi.verify(t.id);
       setResults((prev) => ({ ...prev, [t.id]: r }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo verificar.');
+      setError(message(err, 'No se pudo verificar.'));
     } finally {
       setVerifying(null);
+    }
+  }
+
+  async function addAdmin(t: OperatorTenant) {
+    const email = window.prompt(`Correo del nuevo administrador de ${t.name}:`)?.trim();
+    if (!email) return;
+    const name = window.prompt('Nombre de esa persona:')?.trim();
+    if (!name) return;
+    try {
+      const r = await operatorApi.addAdmin(t.id, email, name);
+      setTemp({ who: r.email, password: r.temporaryPassword });
+    } catch (err) {
+      setError(message(err, 'No se pudo agregar.'));
     }
   }
 
@@ -281,11 +181,15 @@ export function Operator() {
       <header className="topbar">
         <div className="topbar-inner">
           <strong className="brand">Firma electrónica · Operador</strong>
+          <nav>
+            <NavLink to="/cuenta">Mi cuenta</NavLink>
+          </nav>
           <div className="who">
+            <span>{user.name}</span>
             <button type="button" className="btn btn-ghost" onClick={() => void load()}>
               Actualizar
             </button>
-            <button type="button" className="btn btn-ghost" onClick={logout}>
+            <button type="button" className="btn btn-ghost" onClick={() => void disconnect()}>
               Salir
             </button>
           </div>
@@ -293,6 +197,18 @@ export function Operator() {
       </header>
       <main className="container">
         {error && <p className="error" role="alert">{error}</p>}
+
+        {temp && (
+          <div className="notice" role="status">
+            <p>
+              Contraseña provisional de <strong>{temp.who}</strong> (<strong>no se vuelve a mostrar</strong>):
+            </p>
+            <code className="secret">{temp.password}</code>
+            <button type="button" className="btn btn-ghost" onClick={() => setTemp(null)}>
+              Ya la copié
+            </button>
+          </div>
+        )}
 
         {s && tot && (
           <>
@@ -368,6 +284,9 @@ export function Operator() {
                       <button type="button" className="btn" onClick={() => void verify(t)} disabled={verifying === t.id}>
                         {verifying === t.id ? 'Verificando…' : 'Verificar firmas'}
                       </button>{' '}
+                      <button type="button" className="btn" onClick={() => void addAdmin(t)}>
+                        Agregar administrador
+                      </button>{' '}
                       <button type="button" className={t.active ? 'btn btn-danger-outline' : 'btn'} onClick={() => void toggle(t)}>
                         {t.active ? 'Desactivar' : 'Activar'}
                       </button>
@@ -380,7 +299,7 @@ export function Operator() {
         </div>
         <p className="hint">«Verificar firmas» revisa las últimas 100 de la corredora: PDF, sello, sello de tiempo y bitácora.</p>
 
-        <NewTenant opKey={key} onCreated={() => void load()} />
+        <NewTenant onCreated={() => void load()} />
       </main>
     </>
   );

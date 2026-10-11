@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
+import { Roles } from '../auth/access.guard';
 import { ApiError } from '../common/api-error';
 import { ApiKeyGuard, CurrentTenant } from './api-key.guard';
 import { TemplateDetail, TemplateListItem, TemplatesApiService } from './templates.api';
@@ -37,6 +38,7 @@ export class TemplatesController {
   }
 
   @Post(':documentType/preview')
+  @Roles('ADMIN')
   @HttpCode(200)
   async preview(
     @CurrentTenant() tenant: Tenant,
@@ -49,6 +51,7 @@ export class TemplatesController {
   }
 
   @Post(':documentType')
+  @Roles('ADMIN')
   @HttpCode(201)
   publish(
     @CurrentTenant() tenant: Tenant,

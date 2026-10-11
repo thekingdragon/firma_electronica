@@ -28,6 +28,8 @@ export async function resetDatabase(url: string): Promise<Pool> {
   await applyMigrations(url, join(__dirname, '..', 'migrations'));
   const pool = new Pool({ connectionString: url });
   await pool.query('TRUNCATE tenants CASCADE');
+  // Los operadores no cuelgan de ningún tenant: no los alcanza el CASCADE de arriba.
+  await pool.query('TRUNCATE users CASCADE');
   // La llave de sello va cifrada con SECRETS_KEY y las pruebas usan una distinta cada vez: la anterior no serviría.
   await pool.query('TRUNCATE seal_keys');
   return pool;

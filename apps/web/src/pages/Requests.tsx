@@ -6,7 +6,6 @@ import { ReviewBadge, StatusBadge } from '../components/StatusBadge';
 import { STATUS_LABEL, formatDateTime, isPast } from '../format';
 
 export function Requests() {
-  const { apiKey } = useSession();
   const [status, setStatus] = useState<RequestStatus | ''>('');
   const [items, setItems] = useState<SignatureRequest[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -14,10 +13,10 @@ export function Requests() {
   const load = useCallback(() => {
     setError(null);
     api
-      .list(apiKey, status || undefined)
+      .list(status || undefined)
       .then(setItems)
       .catch((e: Error) => setError(e.message));
-  }, [apiKey, status]);
+  }, [status]);
 
   useEffect(load, [load]);
 

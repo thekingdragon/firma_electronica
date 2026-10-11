@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Inject, Put, UseGuards } from '@nestjs/common';
 import { Pool } from 'pg';
 import { z } from 'zod';
+import { Roles } from '../auth/access.guard';
 import { ApiError } from '../common/api-error';
 import { PG_POOL } from '../db/db.module';
 import { ApiKeyGuard, CurrentTenant } from './api-key.guard';
@@ -34,6 +35,7 @@ export class SettingsController {
   }
 
   @Put()
+  @Roles('ADMIN')
   async put(@CurrentTenant() tenant: Tenant, @Body() body: unknown): Promise<TenantSettings> {
     const parsed = bodySchema.safeParse(body);
     if (!parsed.success) {

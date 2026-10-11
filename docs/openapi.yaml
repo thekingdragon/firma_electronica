@@ -25,33 +25,231 @@ paths:
                 properties:
                   database: { type: string, enum: [up] }
         '503': { description: La base de datos no responde }
+  /v1/auth/login:
+    post:
+      summary: Iniciar sesión en el panel (correo y contraseña)
+      description: |
+        Respuesta según la cuenta: `status: ok` (access token en el cuerpo y refresh en cookie HttpOnly),
+        `mfa_required` (falta el código del segundo factor; viene `pendingToken`) o `mfa_setup_required` (el rol exige
+        segundo factor y aún no lo activó; el `pendingToken` solo sirve para activarlo). Correo inexistente y contraseña
+        errónea dan la misma respuesta. 10 fallos seguidos cierran la cuenta 5 minutos.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [email, password], properties: { email: { type: string }, password: { type: string } } }
+      responses:
+        '200': { description: 'ok | mfa_required | mfa_setup_required' }
+        '401': { description: INVALID_CREDENTIALS }
+        '429': { description: 'ACCOUNT_LOCKED o RATE_LIMITED' }
+  /v1/auth/mfa/verify:
+    post:
+      summary: Segundo paso del inicio de sesión (código de la aplicación o código de recuperación)
+      description: Cinco fallos seguidos cierran el segundo factor 15 minutos. Un mismo código no sirve dos veces.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [pendingToken], properties: { pendingToken: { type: string }, code: { type: string }, recoveryCode: { type: string } } }
+      responses:
+        '200': { description: Sesión abierta (como en login) }
+        '401': { description: INVALID_CODE o INVALID_SESSION }
+        '429': { description: MFA_LOCKED }
+  /v1/auth/mfa/setup-pending:
+    post:
+      summary: Genera el QR del segundo factor para quien debe activarlo antes de entrar (operador)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [pendingToken], properties: { pendingToken: { type: string } } }
+      responses:
+        '200': { description: 'qr (data URI), secret y otpauthUri' }
+        '401': { description: INVALID_SESSION }
+  /v1/auth/mfa/enable-pending:
+    post:
+      summary: Confirma el primer código, activa el factor, abre la sesión y entrega los códigos de recuperación (una vez)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [pendingToken, code], properties: { pendingToken: { type: string }, code: { type: string } } }
+      responses:
+        '200': { description: Sesión abierta más recoveryCodes }
+        '422': { description: INVALID_CODE }
+  /v1/auth/refresh:
+    post:
+      summary: Renueva la sesión con la cookie de refresh (se rota; reusar uno ya reemplazado cierra la sesión entera)
+      responses:
+        '200': { description: Nuevo access token (y cookie nueva salvo en carrera tolerada) }
+        '401': { description: INVALID_SESSION }
+  /v1/auth/logout:
+    post:
+      summary: Cierra la sesión (revoca la familia del refresh)
+      responses:
+        '204': { description: Sesión cerrada }
+  /v1/auth/me:
+    get:
+      summary: Quién es el usuario de la sesión y su corredora
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: OK }
+        '401': { description: INVALID_SESSION }
+  /v1/auth/password/change:
+    post:
+      summary: Cambia la contraseña (pide la actual); cierra las demás sesiones y abre una nueva
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [currentPassword, newPassword], properties: { currentPassword: { type: string }, newPassword: { type: string } } }
+      responses:
+        '200': { description: Sesión nueva }
+        '401': { description: INVALID_CREDENTIALS }
+        '422': { description: VALIDATION_ERROR (política de contraseñas) }
+  /v1/auth/password-reset/request:
+    post:
+      summary: Pide un enlace de recuperación por correo (responde siempre igual, exista o no la cuenta)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [email], properties: { email: { type: string } } }
+      responses:
+        '202': { description: Aceptada }
+  /v1/auth/password-reset/complete:
+    post:
+      summary: Elige una contraseña nueva con el enlace (un solo uso, vale 60 minutos); corta todas las sesiones
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [token, newPassword], properties: { token: { type: string }, newPassword: { type: string } } }
+      responses:
+        '204': { description: Contraseña cambiada }
+        '400': { description: INVALID_RESET_TOKEN }
+  /v1/auth/mfa/setup:
+    post:
+      summary: Genera el QR para activar el segundo factor
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: 'qr, secret, otpauthUri' }
+        '409': { description: MFA_ALREADY_ENABLED }
+  /v1/auth/mfa/enable:
+    post:
+      summary: Confirma el primer código y activa el factor; entrega 10 códigos de recuperación (una vez)
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [code], properties: { code: { type: string } } }
+      responses:
+        '200': { description: recoveryCodes }
+        '422': { description: INVALID_CODE }
+  /v1/auth/mfa/disable:
+    post:
+      summary: Desactiva el segundo factor (contraseña y código); no aplica a roles que lo exigen
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [password, code], properties: { password: { type: string }, code: { type: string } } }
+      responses:
+        '204': { description: Desactivado }
+        '403': { description: MFA_REQUIRED }
+  /v1/users:
+    get:
+      summary: Usuarios de la corredora (solo administrador con sesión)
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: OK }
+        '403': { description: FORBIDDEN_ROLE }
+    post:
+      summary: Alta de un usuario (ADMIN o REVIEWER); la contraseña provisional se devuelve UNA vez
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, name, role]
+              properties: { email: { type: string }, name: { type: string }, role: { type: string, enum: [ADMIN, REVIEWER] } }
+      responses:
+        '201': { description: id y temporaryPassword }
+        '409': { description: EMAIL_TAKEN }
+  /v1/users/{id}:
+    patch:
+      summary: Cambia el rol o la baja de un usuario (no a uno mismo; corta sus sesiones)
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { role: { type: string, enum: [ADMIN, REVIEWER] }, active: { type: boolean } } }
+      responses:
+        '204': { description: Cambiado }
+        '404': { description: USER_NOT_FOUND }
+        '409': { description: 'CANNOT_CHANGE_SELF o LAST_ADMIN' }
+  /v1/users/{id}/reset-password:
+    post:
+      summary: Restablece la contraseña de otro usuario (provisional, una vez; corta sus sesiones)
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      responses:
+        '200': { description: temporaryPassword }
+  /v1/users/{id}/reset-mfa:
+    post:
+      summary: Quita el segundo factor de otro usuario (perdió el teléfono y los códigos)
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      responses:
+        '204': { description: Quitado }
+  /v1/operator/tenants/{id}/admin:
+    post:
+      summary: Agrega un administrador a una corredora; la contraseña provisional se devuelve UNA vez
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [email, name], properties: { email: { type: string }, name: { type: string } } }
+      responses:
+        '201': { description: email y temporaryPassword }
+        '404': { description: TENANT_NOT_FOUND }
+        '409': { description: EMAIL_TAKEN }
   /v1/operator/overview:
     get:
       summary: Panel de operador — estado del servicio y totales de todas las corredoras
       description: |
-        Credencial propia (`X-Operator-Key` = `OPERATOR_KEY`), distinta de la clave de API de una corredora. Sin
-        `OPERATOR_KEY` el panel no existe (404 `OPERATOR_DISABLED`); por defecto tampoco acepta lo que llegue por el túnel
-        de Cloudflare (`OPERATOR_ALLOW_REMOTE`).
-      security: [{ operatorKey: [] }]
+        Solo para una SESIÓN de un usuario con rol OPERATOR (con segundo factor obligatorio); la clave de API de una
+        corredora y las sesiones de corredora no lo abren. Por defecto no acepta lo que llegue por el túnel de Cloudflare
+        (404 `OPERATOR_DISABLED`; `OPERATOR_ALLOW_REMOTE` lo permite).
+      security: [{ bearer: [] }]
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema: { type: object, properties: { service: { type: object }, totals: { type: object } } }
-        '401': { description: INVALID_OPERATOR_KEY }
+        '401': { description: INVALID_SESSION }
+        '403': { description: FORBIDDEN_ROLE }
         '404': { description: OPERATOR_DISABLED }
-        '429': { description: RATE_LIMITED }
   /v1/operator/tenants:
     get:
       summary: Corredoras con sus cifras y alertas
-      security: [{ operatorKey: [] }]
+      security: [{ bearer: [] }]
       responses:
         '200': { description: OK }
-        '401': { description: INVALID_OPERATOR_KEY }
+        '401': { description: INVALID_SESSION }
     post:
       summary: Alta de una corredora; la clave de API se devuelve UNA sola vez
-      security: [{ operatorKey: [] }]
+      security: [{ bearer: [] }]
       requestBody:
         required: true
         content:
@@ -65,14 +263,17 @@ paths:
                 country: { type: string, example: PE }
                 registryCode: { type: string, nullable: true }
                 webhookUrl: { type: string, nullable: true }
+                adminEmail: { type: string, description: 'Si se indica, crea el primer administrador de la corredora.' }
+                adminName: { type: string }
       responses:
-        '201': { description: Creada (tenant, apiKey, webhookSecret) }
-        '401': { description: INVALID_OPERATOR_KEY }
+        '201': { description: 'Creada: tenant, apiKey, webhookSecret y admin {email, temporaryPassword} (todo se devuelve UNA vez)' }
+        '409': { description: EMAIL_TAKEN }
+        '401': { description: INVALID_SESSION }
         '422': { description: VALIDATION_ERROR }
   /v1/operator/tenants/{id}/active:
     post:
       summary: Activar o desactivar una corredora (desactivada, su clave de API deja de funcionar)
-      security: [{ operatorKey: [] }]
+      security: [{ bearer: [] }]
       parameters: [{ $ref: '#/components/parameters/id' }]
       requestBody:
         required: true
@@ -85,7 +286,7 @@ paths:
   /v1/operator/tenants/{id}/verify:
     post:
       summary: Verifica las últimas 100 firmas de una corredora (PDF, sello, sello de tiempo y bitácora)
-      security: [{ operatorKey: [] }]
+      security: [{ bearer: [] }]
       parameters: [{ $ref: '#/components/parameters/id' }]
       responses:
         '200': { description: "checked, ok, unsealed y failed[] con los problemas de cada firma" }
@@ -573,7 +774,7 @@ paths:
 components:
   securitySchemes:
     apiKey: { type: apiKey, in: header, name: X-Api-Key }
-    operatorKey: { type: apiKey, in: header, name: X-Operator-Key }
+    bearer: { type: http, scheme: bearer, description: 'Access token de una sesión del panel (se obtiene en /v1/auth/login; dura 15 min y se renueva con la cookie de refresh).' }
   parameters:
     id: { in: path, name: id, required: true, schema: { type: string, format: uuid } }
     documentType: { in: path, name: documentType, required: true, schema: { type: string, example: APPOINTMENT_LETTER } }

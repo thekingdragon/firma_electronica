@@ -11,8 +11,11 @@ const createSchema = z
     country: z.string().regex(/^[A-Za-z]{2}$/, 'Use un código de 2 letras (ej. PE).'),
     registryCode: z.string().trim().max(60).optional().nullable(),
     webhookUrl: z.url().optional().nullable(),
+    adminEmail: z.string().trim().min(3).max(200).optional(),
+    adminName: z.string().trim().max(120).optional(),
   })
   .strict();
+const adminSchema = z.object({ email: z.string().trim().min(3).max(200), name: z.string().trim().min(1).max(120) }).strict();
 const activeSchema = z.object({ active: z.boolean() }).strict();
 
 function parse<T>(schema: z.ZodType<T>, body: unknown, message: string): T {
@@ -48,6 +51,14 @@ export class OperatorController {
     const created = await this.operator.create(input);
     this.logger.warn(`Corredora creada: ${created.tenant.name} (${created.tenant.id})`);
     return created;
+  }
+
+  /** Nuevo administrador de una corredora; la contraseña provisional se devuelve UNA vez. */
+  @Post('tenants/:id/admin')
+  async addAdmin(@Param('id', new ParseUUIDPipe()) id: string, @Body() body: unknown) {
+    const b = parse(adminSchema, body, 'Indique correo y nombre.');
+    this.logger.warn(`Administrador agregado a la corredora ${id}: ${b.email}`);
+    return this.operator.addAdmin(id, b.email, b.name);
   }
 
   @Post('tenants/:id/active')

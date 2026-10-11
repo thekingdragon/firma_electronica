@@ -2,8 +2,9 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useSession, useAuth } from '../auth';
 
 export function Layout() {
-  const { me } = useSession();
+  const { user, tenant } = useSession();
   const { disconnect } = useAuth();
+  const admin = user.role === 'ADMIN';
   return (
     <>
       <header className="topbar">
@@ -13,14 +14,18 @@ export function Layout() {
             <NavLink to="/solicitudes" end>
               Solicitudes
             </NavLink>
-            <NavLink to="/solicitudes/nueva">Nueva solicitud</NavLink>
-            <NavLink to="/plantillas">Plantillas</NavLink>
-            <NavLink to="/ajustes">Ajustes</NavLink>
+            {/* El revisor consulta y dictamina; crear, plantillas, ajustes y personas son del administrador. */}
+            {admin && <NavLink to="/solicitudes/nueva">Nueva solicitud</NavLink>}
+            {admin && <NavLink to="/plantillas">Plantillas</NavLink>}
+            {admin && <NavLink to="/ajustes">Ajustes</NavLink>}
+            {admin && <NavLink to="/usuarios">Usuarios</NavLink>}
           </nav>
           <div className="who">
-            <span title={me.legalName}>{me.name}</span>
-            <button type="button" className="btn btn-ghost" onClick={disconnect}>
-              Desconectar
+            <NavLink to="/cuenta" title={`${user.email}${tenant ? ` · ${tenant.legalName}` : ''}`}>
+              {user.name}
+            </NavLink>
+            <button type="button" className="btn btn-ghost" onClick={() => void disconnect()}>
+              Salir
             </button>
           </div>
         </div>

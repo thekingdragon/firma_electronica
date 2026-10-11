@@ -3,7 +3,6 @@ import { ApiRequestError, api } from '../api';
 import { useSession } from '../auth';
 
 export function Settings() {
-  const { apiKey } = useSession();
   const [notice, setNotice] = useState<string | null>(null);
   const [saved, setSaved] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -12,13 +11,13 @@ export function Settings() {
 
   useEffect(() => {
     api
-      .settings(apiKey)
+      .settings()
       .then((s) => {
         setNotice(s.privacyNotice ?? '');
         setSaved(s.privacyNotice ?? '');
       })
       .catch((e: Error) => setError(e.message));
-  }, [apiKey]);
+  }, []);
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -26,7 +25,7 @@ export function Settings() {
     setError(null);
     setDone(false);
     try {
-      const r = await api.saveSettings(apiKey, { privacyNotice: (notice ?? '').trim() === '' ? null : (notice ?? '').trim() });
+      const r = await api.saveSettings({ privacyNotice: (notice ?? '').trim() === '' ? null : (notice ?? '').trim() });
       setNotice(r.privacyNotice ?? '');
       setSaved(r.privacyNotice ?? '');
       setDone(true);

@@ -7,10 +7,13 @@ import {
   Param,
   Post,
   Query,
+  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { Roles } from '../auth/access.guard';
+import type { SessionUser } from '../auth/session';
 import { ApiError } from '../common/api-error';
 import { ApiKeyGuard, CurrentTenant } from '../tenants/api-key.guard';
 import type { Tenant } from '../tenants/tenants.service';
@@ -29,6 +32,7 @@ export class RequestsController {
   ) {}
 
   @Post()
+  @Roles('ADMIN')
   @HttpCode(201)
   async create(
     @CurrentTenant() tenant: Tenant,
@@ -61,6 +65,7 @@ export class RequestsController {
 
   /** Revoca una solicitud pendiente: el link deja de abrir. Avisa al host (signature.revoked). */
   @Post(':id/revoke')
+  @Roles('ADMIN')
   @HttpCode(200)
   revoke(@CurrentTenant() tenant: Tenant, @Param('id') id: string) {
     return this.actions.revoke(tenant, id);
@@ -75,8 +80,10 @@ export class RequestsController {
   /** Dictamen del corredor sobre la evidencia (VERIFIED o REJECTED). Avisa al host (signature.reviewed). */
   @Post(':id/review')
   @HttpCode(200)
-  review(@CurrentTenant() tenant: Tenant, @Param('id') id: string, @Body() body: unknown) {
-    return this.actions.review(tenant, id, body);
+  review(@CurrentTenant() tenant: Tenant, @Param('id') id: string, @Body() body: unknown, @Req() req: Request & { user?: SessionUser }) {
+    // Con sesión, quien dictamina es quien entró: no se acepta un nombre escrito a mano (la bitácora puede probar quién fue).
+    const input = req.user && body && typeof body === 'object' ? { ...(body as object), reviewedBy: `${req.user.name} <${req.user.email}>` } : body;
+    return this.actions.review(tenant, id, input);
   }
 
   @Get(':id/document')

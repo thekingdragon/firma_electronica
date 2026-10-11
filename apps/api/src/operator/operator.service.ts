@@ -7,6 +7,7 @@ import { PG_POOL } from '../db/db.module';
 import { verifyAll } from '../ops/verify-evidence';
 import { MAX_TSA_ATTEMPTS as MAX_ATTEMPTS } from '../seal/seal.service';
 import { StorageService } from '../storage/storage.service';
+import { insertUser } from '../auth/users.service';
 import { CreateTenantInput, createTenant } from '../tenants/tenants.service';
 
 export interface OperatorOverview {
@@ -138,9 +139,25 @@ export class OperatorService {
     }));
   }
 
-  async create(input: CreateTenantInput) {
+  /** Alta de una corredora, con su primer administrador si se indica (contraseña provisional, una sola vez). */
+  async create(input: CreateTenantInput & { adminEmail?: string; adminName?: string }) {
+    if (input.adminEmail) {
+      const taken = await this.pool.query('SELECT 1 FROM users WHERE lower(email) = lower($1)', [input.adminEmail.trim()]);
+      if (taken.rowCount) throw new ApiError(409, 'EMAIL_TAKEN', 'Ya existe un usuario con ese correo.');
+    }
     const created = await createTenant(this.pool, input, this.config.secretsKey);
-    return { tenant: created.tenant, apiKey: created.apiKey, webhookSecret: created.webhookSecret };
+    const admin = input.adminEmail
+      ? await insertUser(this.pool, { tenantId: created.tenant.id, email: input.adminEmail, name: input.adminName?.trim() || input.name, role: 'ADMIN' })
+      : null;
+    return { tenant: created.tenant, apiKey: created.apiKey, webhookSecret: created.webhookSecret, admin: admin ? { email: input.adminEmail, temporaryPassword: admin.temporaryPassword } : null };
+  }
+
+  /** Agrega un administrador a una corredora (p. ej. cuando se quedó sin acceso). */
+  async addAdmin(tenantId: string, email: string, name: string) {
+    const { rowCount } = await this.pool.query('SELECT 1 FROM tenants WHERE id = $1', [tenantId]);
+    if (!rowCount) throw new ApiError(404, 'TENANT_NOT_FOUND', 'No existe esa corredora.');
+    const u = await insertUser(this.pool, { tenantId, email, name, role: 'ADMIN' });
+    return { email, temporaryPassword: u.temporaryPassword };
   }
 
   async setActive(id: string, active: boolean): Promise<void> {

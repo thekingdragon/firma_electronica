@@ -5,16 +5,15 @@ import { useSession } from '../auth';
 import { formatDateTime } from '../format';
 
 export function Templates() {
-  const { apiKey } = useSession();
   const [items, setItems] = useState<TemplateListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api
-      .templates(apiKey)
+      .templates()
       .then(setItems)
       .catch((e: Error) => setError(e.message));
-  }, [apiKey]);
+  }, []);
 
   return (
     <>
