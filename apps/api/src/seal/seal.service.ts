@@ -7,7 +7,7 @@ import { StorageNotConfiguredError, StorageService } from '../storage/storage.se
 import { SealKeyMaterial, SealMeta, certificateFingerprint, generateSealKey, sealPdf } from './seal';
 import { TsaError, requestTimestamp } from './tsa';
 
-const MAX_TSA_ATTEMPTS = 12;
+export const MAX_TSA_ATTEMPTS = 12;
 /** Espera (segundos) antes de reintentar el sello de tiempo, según los intentos que lleva. */
 const TSA_BACKOFF_SECONDS = [30, 120, 600, 1800, 3600, 3 * 3600];
 const LOCK_KEY = 7_301_003;

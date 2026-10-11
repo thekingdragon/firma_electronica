@@ -49,6 +49,10 @@ const envSchema = z.object({
   WEB_DIST_DIR: z.string().min(1).optional(),
   // Autoridad de sellado de tiempo (RFC 3161). Sin ella las firmas se sellan igual, pero sin hora de un tercero.
   TSA_URL: z.url().optional(),
+  // Clave del PANEL DE OPERADOR (quien administra el servicio, por encima de las corredoras). Sin ella el panel no existe.
+  OPERATOR_KEY: z.string().min(32, 'OPERATOR_KEY debe tener al menos 32 caracteres').optional(),
+  // Por defecto el panel de operador rechaza lo que llegue por el túnel de Cloudflare (solo se abre desde esta máquina o la red local).
+  OPERATOR_ALLOW_REMOTE: boolean(false),
 });
 
 export type AppConfig = {
@@ -67,6 +71,8 @@ export type AppConfig = {
   publicRateLimitPerMin: number;
   webDistDir: string | null;
   tsaUrl: string | null;
+  operatorKey: string | null;
+  operatorAllowRemote: boolean;
 };
 
 /** Lee y valida el entorno. Falla al arrancar, no en la primera petición. */
@@ -100,5 +106,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     publicRateLimitPerMin: e.PUBLIC_RATE_LIMIT_PER_MIN,
     webDistDir: e.WEB_DIST_DIR ? resolve(e.WEB_DIST_DIR) : null,
     tsaUrl: e.TSA_URL ?? null,
+    operatorKey: e.OPERATOR_KEY ?? null,
+    operatorAllowRemote: e.OPERATOR_ALLOW_REMOTE,
   };
 }

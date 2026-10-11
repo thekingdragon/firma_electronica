@@ -22,7 +22,7 @@ export interface VerifySummary {
 export async function verifyAll(
   pool: Pool,
   storage: StorageService,
-  opts: { tenantId?: string; since?: string; strict?: boolean } = {},
+  opts: { tenantId?: string; since?: string; strict?: boolean; limit?: number } = {},
 ): Promise<VerifySummary> {
   const params: unknown[] = [];
   const where = ["status = 'SIGNED'"];
@@ -34,7 +34,7 @@ export async function verifyAll(
     params.push(opts.since);
     where.push(`signed_at >= $${params.length}::date`);
   }
-  const { rows } = await pool.query<{ id: string }>(`SELECT id FROM signature_requests WHERE ${where.join(' AND ')} ORDER BY signed_at`, params);
+  const { rows } = await pool.query<{ id: string }>(`SELECT id FROM signature_requests WHERE ${where.join(' AND ')} ORDER BY signed_at DESC${opts.limit ? ' LIMIT ' + Math.floor(opts.limit) : ''}`, params);
   const out: VerifySummary = { total: rows.length, ok: 0, unsealed: 0, failed: [] };
   for (const { id } of rows) {
     const r = await checkIntegrity(pool, storage, id);

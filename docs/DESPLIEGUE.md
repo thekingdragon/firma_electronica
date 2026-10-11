@@ -182,6 +182,16 @@ tratan como fallo.
 
 ## 9. Operación
 
+- **Panel de operador** (`/operador`): lo usa quien administra el servicio entero, no una corredora. Muestra el
+  estado (base, carpeta de archivos, `SECRETS_KEY`, llave de sello, sello de tiempo), los totales de todas las
+  corredoras, sus alertas (correo con error, webhooks fallidos, sellos de tiempo pendientes, firmas por revisar),
+  permite **dar de alta** una corredora (la clave de API se muestra una sola vez), **activar/desactivar** una
+  (desactivada, su clave deja de funcionar) y **verificar sus últimas 100 firmas**. Se habilita definiendo
+  `OPERATOR_KEY` (mínimo 32 caracteres; sin ella el panel no existe). **Por defecto no se abre por el túnel de
+  Cloudflare**: solo desde esta máquina o la red local; `OPERATOR_ALLOW_REMOTE=true` lo abre a Internet y solo
+  conviene si esa clave es larga y se guarda como un secreto. Las altas y desactivaciones quedan en el log del
+  servicio, no en una bitácora de base de datos.
+
 - **Estado de los avisos al host:** tabla `webhook_deliveries` (`delivered_at`, `failed_at`, `last_error`).
 - **Correo:** `tenant_mail_settings.last_error` guarda el último fallo de envío, ya explicado.
 - **Solicitudes que no avanzan:** el vencimiento automático corre cada minuto; una solicitud vencida pasa

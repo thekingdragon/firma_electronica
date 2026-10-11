@@ -25,6 +25,71 @@ paths:
                 properties:
                   database: { type: string, enum: [up] }
         '503': { description: La base de datos no responde }
+  /v1/operator/overview:
+    get:
+      summary: Panel de operador — estado del servicio y totales de todas las corredoras
+      description: |
+        Credencial propia (`X-Operator-Key` = `OPERATOR_KEY`), distinta de la clave de API de una corredora. Sin
+        `OPERATOR_KEY` el panel no existe (404 `OPERATOR_DISABLED`); por defecto tampoco acepta lo que llegue por el túnel
+        de Cloudflare (`OPERATOR_ALLOW_REMOTE`).
+      security: [{ operatorKey: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, properties: { service: { type: object }, totals: { type: object } } }
+        '401': { description: INVALID_OPERATOR_KEY }
+        '404': { description: OPERATOR_DISABLED }
+        '429': { description: RATE_LIMITED }
+  /v1/operator/tenants:
+    get:
+      summary: Corredoras con sus cifras y alertas
+      security: [{ operatorKey: [] }]
+      responses:
+        '200': { description: OK }
+        '401': { description: INVALID_OPERATOR_KEY }
+    post:
+      summary: Alta de una corredora; la clave de API se devuelve UNA sola vez
+      security: [{ operatorKey: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, legalName, country]
+              properties:
+                name: { type: string }
+                legalName: { type: string }
+                country: { type: string, example: PE }
+                registryCode: { type: string, nullable: true }
+                webhookUrl: { type: string, nullable: true }
+      responses:
+        '201': { description: Creada (tenant, apiKey, webhookSecret) }
+        '401': { description: INVALID_OPERATOR_KEY }
+        '422': { description: VALIDATION_ERROR }
+  /v1/operator/tenants/{id}/active:
+    post:
+      summary: Activar o desactivar una corredora (desactivada, su clave de API deja de funcionar)
+      security: [{ operatorKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [active], properties: { active: { type: boolean } } }
+      responses:
+        '200': { description: OK }
+        '404': { description: TENANT_NOT_FOUND }
+  /v1/operator/tenants/{id}/verify:
+    post:
+      summary: Verifica las últimas 100 firmas de una corredora (PDF, sello, sello de tiempo y bitácora)
+      security: [{ operatorKey: [] }]
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      responses:
+        '200': { description: "checked, ok, unsealed y failed[] con los problemas de cada firma" }
+        '404': { description: TENANT_NOT_FOUND }
   /v1/me:
     get:
       summary: Quién es el dueño de la clave de API (sirve para validarla)
@@ -508,6 +573,7 @@ paths:
 components:
   securitySchemes:
     apiKey: { type: apiKey, in: header, name: X-Api-Key }
+    operatorKey: { type: apiKey, in: header, name: X-Operator-Key }
   parameters:
     id: { in: path, name: id, required: true, schema: { type: string, format: uuid } }
     documentType: { in: path, name: documentType, required: true, schema: { type: string, example: APPOINTMENT_LETTER } }

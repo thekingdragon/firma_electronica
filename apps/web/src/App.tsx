@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth';
 import { Layout } from './components/Layout';
 import { Connect } from './pages/Connect';
+import { Operator } from './pages/Operator';
 import { NewRequest } from './pages/NewRequest';
 import { RequestDetail } from './pages/RequestDetail';
 import { TemplateEditor } from './pages/TemplateEditor';
@@ -40,6 +41,8 @@ export function App() {
     <Routes>
       {/* La página PÚBLICA de firma no pasa por el panel ni usa su sesión. */}
       <Route path="/s/:token" element={<SignPage />} />
+      {/* El panel de OPERADOR (todo el servicio) tiene su propia clave y no usa la sesión de una corredora. */}
+      <Route path="/operador" element={<Operator />} />
       <Route path="/*" element={<Panel />} />
     </Routes>
   );
