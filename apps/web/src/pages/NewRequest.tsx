@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { formatDateTime } from '../format';
 import { Link } from 'react-router-dom';
 import { api, ApiRequestError, type CreateRequestBody } from '../api';
 import { useSession } from '../auth';
@@ -114,7 +115,7 @@ export function NewRequest() {
         <div className="card">
           <p>
             Referencia <strong>{result.reference}</strong> · vence el{' '}
-            {new Date(result.expiresAt).toLocaleString('es-PE', { dateStyle: 'medium', timeStyle: 'short' })}
+            {formatDateTime(result.expiresAt)}
           </p>
           {result.sentTo ? (
             <>

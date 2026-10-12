@@ -320,6 +320,7 @@ export function SignPage() {
           session={session}
           reference={result.reference}
           signedAt={result.signedAt || null}
+          timezone={view?.issuer.timezone ?? null}
           emailed={result.emailed}
           awaitingReview={result.awaitingReview}
         />

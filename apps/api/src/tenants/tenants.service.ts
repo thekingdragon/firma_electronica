@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
+import { ZONA_POR_DEFECTO } from '../common/fechas';
 import { seal } from '../common/secret-box';
 import { PG_OWNER } from '../db/db.module';
 import { generateApiKey, hashApiKey, looksLikeApiKey } from './api-key';
@@ -13,6 +14,8 @@ export interface Tenant {
   legalName: string;
   registryCode: string | null;
   webhookUrl: string | null;
+  /** Zona IANA con que se muestran las horas de esta corredora (PDF, correos, panel). */
+  timezone: string;
 }
 
 export interface CreateTenantInput {
@@ -21,6 +24,8 @@ export interface CreateTenantInput {
   legalName: string;
   registryCode?: string | null;
   webhookUrl?: string | null;
+  /** Zona IANA; por defecto America/Lima. */
+  timezone?: string;
 }
 
 export interface CreatedTenant {
@@ -38,6 +43,7 @@ interface TenantRow {
   legal_name: string;
   registry_code: string | null;
   webhook_url: string | null;
+  timezone: string;
 }
 
 const toTenant = (r: TenantRow): Tenant => ({
@@ -47,6 +53,7 @@ const toTenant = (r: TenantRow): Tenant => ({
   legalName: r.legal_name,
   registryCode: r.registry_code,
   webhookUrl: r.webhook_url,
+  timezone: r.timezone,
 });
 
 /**
@@ -64,9 +71,9 @@ export async function createTenant(
   try {
     await client.query('BEGIN');
     const { rows } = await client.query<TenantRow>(
-      `INSERT INTO tenants (name, country, api_key_hash, webhook_url, webhook_secret_enc, legal_name, registry_code)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, name, country, legal_name, registry_code, webhook_url`,
+      `INSERT INTO tenants (name, country, api_key_hash, webhook_url, webhook_secret_enc, legal_name, registry_code, timezone)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, name, country, legal_name, registry_code, webhook_url, timezone`,
       [
         input.name,
         input.country.toUpperCase(),
@@ -75,6 +82,7 @@ export async function createTenant(
         secretsKey && webhookSecret ? seal(secretsKey, 'webhook-secret', webhookSecret) : null,
         input.legalName,
         input.registryCode ?? null,
+        input.timezone ?? ZONA_POR_DEFECTO,
       ],
     );
     const tenant = toTenant(rows[0]);
@@ -139,7 +147,7 @@ export class TenantsService {
 
   async findById(id: string): Promise<Tenant | null> {
     const { rows } = await this.pool.query<TenantRow>(
-      `SELECT id, name, country, legal_name, registry_code, webhook_url FROM tenants WHERE id = $1 AND active`,
+      `SELECT id, name, country, legal_name, registry_code, webhook_url, timezone FROM tenants WHERE id = $1 AND active`,
       [id],
     );
     return rows[0] ? toTenant(rows[0]) : null;
@@ -149,7 +157,7 @@ export class TenantsService {
   async findByApiKey(apiKey: string): Promise<Tenant | null> {
     if (!looksLikeApiKey(apiKey)) return null;
     const { rows } = await this.pool.query<TenantRow>(
-      `SELECT id, name, country, legal_name, registry_code, webhook_url
+      `SELECT id, name, country, legal_name, registry_code, webhook_url, timezone
          FROM tenants
         WHERE api_key_hash = $1 AND active`,
       [hashApiKey(apiKey)],

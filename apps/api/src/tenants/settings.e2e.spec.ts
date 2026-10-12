@@ -83,7 +83,7 @@ describe('ajustes: aviso de datos personales', () => {
 
   it('al empezar no hay aviso, y los correos salen sin él', async () => {
     const r = await http().get('/v1/settings').set(as(keyA));
-    expect(r.body).toEqual({ privacyNotice: null });
+    expect(r.body).toMatchObject({ privacyNotice: null });
     const mail = await enviarCodigo(keyA);
     expect(mail.text).toContain('Su código de verificación es');
     expect(mail.text).not.toContain('Ley N.º 29733');
@@ -115,13 +115,13 @@ describe('ajustes: aviso de datos personales', () => {
   it('el aviso de una corredora no sale en los correos de otra', async () => {
     const mail = await enviarCodigo(keyB);
     expect(mail.text).not.toContain('Ley N.º 29733');
-    expect((await http().get('/v1/settings').set(as(keyB))).body).toEqual({ privacyNotice: null });
+    expect((await http().get('/v1/settings').set(as(keyB))).body).toMatchObject({ privacyNotice: null });
   });
 
   it('vacío o solo espacios lo quita; null también', async () => {
-    expect((await http().put('/v1/settings').set(as(keyA)).send({ privacyNotice: '   ' })).body).toEqual({ privacyNotice: null });
+    expect((await http().put('/v1/settings').set(as(keyA)).send({ privacyNotice: '   ' })).body).toMatchObject({ privacyNotice: null });
     await http().put('/v1/settings').set(as(keyA)).send({ privacyNotice: AVISO });
-    expect((await http().put('/v1/settings').set(as(keyA)).send({ privacyNotice: null })).body).toEqual({ privacyNotice: null });
+    expect((await http().put('/v1/settings').set(as(keyA)).send({ privacyNotice: null })).body).toMatchObject({ privacyNotice: null });
     expect((await enviarCodigo(keyA)).text).not.toContain('Ley N.º 29733');
   });
 

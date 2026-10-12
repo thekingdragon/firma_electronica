@@ -1,3 +1,4 @@
+import { fechaHoraEnZona, fechaLargaEnZona } from '../common/fechas';
 import { Block, VariableContext, dataStrings, fillVariables, resolveBlocks } from './blocks';
 import { plainText, stripMarks } from './inline';
 import { PdfFlow } from './pdf-flow';
@@ -9,13 +10,14 @@ const NO_OBSERVATION = '—';
 /** «A», «B», … «Z»; pasado el alfabeto, números. */
 const letter = (i: number): string => (i < 26 ? String.fromCharCode(65 + i) : String(i + 1));
 
-export function formatDate(d: Date): string {
-  return d.toLocaleDateString('es-PE', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' });
+/** La fecha larga de un instante, en la zona de la corredora ('4 de octubre de 2026'). */
+export function formatDate(d: Date, zone: string): string {
+  return fechaLargaEnZona(d, zone);
 }
 
-function formatDateTimeUtc(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())} UTC`;
+/** Fecha y hora con segundos y el desfase al lado, en la zona de la corredora: '04/10/2026 12:35:12 (UTC-5)'. */
+function formatDateTimeZone(d: Date, zone: string): string {
+  return fechaHoraEnZona(d, zone, { segundos: true });
 }
 
 /** Las variables de un documento concreto. La fecha es la de la firma. */
@@ -27,7 +29,7 @@ export function variableContextOf(input: Pick<RenderInput, 'issuer' | 'signer' |
     signerDocumentType: input.signer.documentType,
     signerDocumentNumber: input.signer.documentNumber,
     reference: input.reference,
-    date: formatDate(input.signedAt),
+    date: formatDate(input.signedAt, input.issuer.timezone),
   };
 }
 
@@ -61,7 +63,7 @@ export const renderBlocksDocument: DocumentRenderer = async (input: RenderInput)
         if (b.showRegistry && input.issuer.registryCode) {
           f.paragraph(`Código de registro: ${input.issuer.registryCode}`, { size: 9, color: 'muted', after: b.showDate ? 10 : 12 });
         } else f.gap(b.showDate ? 9 : 6);
-        if (b.showDate) f.paragraph(formatDate(input.signedAt), { align: 'right', after: 14 });
+        if (b.showDate) f.paragraph(formatDate(input.signedAt, input.issuer.timezone), { align: 'right', after: 14 });
         return;
       case 'title':
         f.paragraph(fill(b.text), { size: 14, bold: true, align: 'center', after: 16 });
@@ -106,7 +108,7 @@ export const renderBlocksDocument: DocumentRenderer = async (input: RenderInput)
         f.gap(6);
         return;
       case 'signatureStamp':
-        f.paragraph(`Firmado electrónicamente el ${formatDateTimeUtc(input.signedAt)}.`, { size: 9, color: 'muted', after: 4 });
+        f.paragraph(`Firmado electrónicamente el ${formatDateTimeZone(input.signedAt, input.issuer.timezone)}.`, { size: 9, color: 'muted', after: 4 });
         f.paragraph(input.clauseText, { size: 9, color: 'muted', after: 4 });
         return;
       case 'annex': {
@@ -136,8 +138,8 @@ export const renderBlocksDocument: DocumentRenderer = async (input: RenderInput)
   f.rule();
   f.paragraph(EVIDENCE_TITLE, { size: 11, bold: true, after: 6 });
   f.field('Referencia:', input.reference);
-  f.field('Fecha y hora de la firma:', formatDateTimeUtc(input.signedAt));
-  if (input.evidence.otpVerifiedAt) f.field('Código de verificación (OTP) validado:', formatDateTimeUtc(input.evidence.otpVerifiedAt));
+  f.field('Fecha y hora de la firma:', formatDateTimeZone(input.signedAt, input.issuer.timezone));
+  if (input.evidence.otpVerifiedAt) f.field('Código de verificación (OTP) validado:', formatDateTimeZone(input.evidence.otpVerifiedAt, input.issuer.timezone));
   f.field('Dirección IP:', input.evidence.ip ?? 'desconocida');
   if (input.evidence.challengeCode) f.field('Código del desafío mostrado en pantalla:', input.evidence.challengeCode);
   if (input.evidence.photo) {

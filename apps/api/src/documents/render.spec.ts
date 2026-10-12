@@ -14,7 +14,7 @@ const photo = makePng(1280, 720);
 
 const input = (over: Partial<RenderInput> = {}): RenderInput => ({
   reference: 'FE-2026-ABCD1234',
-  issuer: { legalName: 'Corredora Demo de Seguros S.A.C.', registryCode: 'J-0001' },
+  issuer: { legalName: 'Corredora Demo de Seguros S.A.C.', registryCode: 'J-0001', timezone: 'America/Lima' },
   signer: { name: 'Ana Pérez Quispe', documentType: 'DNI', documentNumber: '12345678' },
   data: { insurances: ['SCTR Salud', 'SCTR Pensión'] },
   content: tpl.bodyJson,

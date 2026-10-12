@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Logger, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
 import { ApiError } from '../common/api-error';
+import { esZonaValida } from '../common/fechas';
 import { OperatorGuard } from './operator.guard';
 import { OperatorService } from './operator.service';
 
@@ -11,6 +12,7 @@ const createSchema = z
     country: z.string().regex(/^[A-Za-z]{2}$/, 'Use un código de 2 letras (ej. PE).'),
     registryCode: z.string().trim().max(60).optional().nullable(),
     webhookUrl: z.url().optional().nullable(),
+    timezone: z.string().refine(esZonaValida, 'Elija una zona horaria válida (p. ej. America/Lima).').optional(),
     adminEmail: z.string().trim().min(3).max(200).optional(),
     adminName: z.string().trim().max(120).optional(),
   })

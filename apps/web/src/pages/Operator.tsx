@@ -22,7 +22,7 @@ function Stat({ label, value, bad }: { label: string; value: number | string; ba
 }
 
 function NewTenant({ onCreated }: { onCreated: () => void }) {
-  const [form, setForm] = useState({ name: '', legalName: '', country: 'PE', registryCode: '', adminEmail: '', adminName: '' });
+  const [form, setForm] = useState({ name: '', legalName: '', country: 'PE', timezone: 'America/Lima', registryCode: '', adminEmail: '', adminName: '' });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<CreatedTenant | null>(null);
@@ -36,11 +36,12 @@ function NewTenant({ onCreated }: { onCreated: () => void }) {
         name: form.name,
         legalName: form.legalName,
         country: form.country,
+        timezone: form.timezone,
         ...(form.registryCode.trim() ? { registryCode: form.registryCode.trim() } : {}),
         ...(form.adminEmail.trim() ? { adminEmail: form.adminEmail.trim(), adminName: form.adminName.trim() } : {}),
       };
       setCreated(await operatorApi.createTenant(body));
-      setForm({ name: '', legalName: '', country: 'PE', registryCode: '', adminEmail: '', adminName: '' });
+      setForm({ name: '', legalName: '', country: 'PE', timezone: 'America/Lima', registryCode: '', adminEmail: '', adminName: '' });
       onCreated();
     } catch (err) {
       setError(message(err, 'No se pudo crear.'));
@@ -66,6 +67,10 @@ function NewTenant({ onCreated }: { onCreated: () => void }) {
           <div>
             <label htmlFor="n-country">País *</label>
             <input id="n-country" maxLength={2} value={form.country} onChange={set('country')} />
+          </div>
+          <div>
+            <label htmlFor="n-tz">Zona horaria *</label>
+            <input id="n-tz" value={form.timezone} onChange={set('timezone')} placeholder="America/Lima" />
           </div>
           <div>
             <label htmlFor="n-reg">Código de registro</label>

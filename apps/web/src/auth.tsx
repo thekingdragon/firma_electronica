@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { setPanelZone } from './format';
 import { authApi, setAccessToken, setSessionRefresher, type AuthTenant, type AuthUser, type SessionResponse } from './api';
 
 interface Session {
@@ -28,11 +29,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const adopt = useCallback((s: SessionResponse) => {
     setAccessToken(s.accessToken);
+    setPanelZone(s.tenant?.timezone ?? null);
     setSession({ user: s.user, tenant: s.tenant });
   }, []);
 
   const clear = useCallback(() => {
     setAccessToken(null);
+    setPanelZone(null);
     setSession(null);
   }, []);
 

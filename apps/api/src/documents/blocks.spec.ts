@@ -222,7 +222,7 @@ describe('formulario de la plantilla con bloques', () => {
 describe('renderBlocksDocument', () => {
   const input = (over: Partial<RenderInput> = {}): RenderInput => ({
     reference: 'FE-2026-ABC',
-    issuer: { legalName: ctx.brokerLegalName, registryCode: 'J701' },
+    issuer: { legalName: ctx.brokerLegalName, registryCode: 'J701', timezone: 'America/Lima' },
     signer: { name: 'Ana Pérez', documentType: 'DNI', documentNumber: '12345678' },
     data: { insurances: ['SCTR', 'Vida'] },
     content: { blocks: base },
@@ -327,7 +327,7 @@ describe('consentimientos', () => {
   it('el PDF cambia según el consentimiento marcado', async () => {
     const input = (consents: string[]): RenderInput => ({
       reference: 'R-1',
-      issuer: { legalName: 'X SAC', registryCode: null },
+      issuer: { legalName: 'X SAC', registryCode: null, timezone: 'America/Lima' },
       signer: { name: 'Ana', documentType: 'DNI', documentNumber: '1' },
       data: {},
       content: { blocks: doc(con({ required: false })) },

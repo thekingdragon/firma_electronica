@@ -31,7 +31,7 @@ export interface SignIntro {
 export interface SigningView {
   reference: string;
   documentType: string;
-  issuer: { legalName: string; registryCode: string | null };
+  issuer: { legalName: string; registryCode: string | null; timezone: string };
   signer: { name: string; documentType: string; documentNumber: string };
   data: Record<string, unknown>;
   /** El documento como lista de bloques, con las variables ya completas: la página solo lo dibuja. */
@@ -54,6 +54,7 @@ export interface LinkRow {
   otp_to: string | null;
   snapshot: { signer: SigningView['signer']; data: Record<string, unknown> };
   legal_name: string;
+  timezone: string;
   registry_code: string | null;
   template_version: number;
   body_json: Record<string, unknown>;
@@ -99,7 +100,7 @@ export class SignService {
       `SELECT r.id, r.tenant_id, r.document_type, r.reference, r.status, r.expires_at,
               (r.expires_at <= now()) AS expired, r.pdf_path,
               r.otp_channel, r.otp_to, r.snapshot,
-              t.legal_name, t.registry_code,
+              t.legal_name, t.registry_code, t.timezone,
               d.version AS template_version, d.body_json, d.annex_text, d.clause_text,
               d.photo_required, d.photo_challenge_required, d.id_photo_required, d.id_photo_back_required, d.review_required
          FROM signature_requests r
@@ -301,7 +302,7 @@ export class SignService {
           signerDocumentType: row.snapshot.signer.documentType,
           signerDocumentNumber: row.snapshot.signer.documentNumber,
           reference: row.reference,
-          date: formatDate(new Date()),
+          date: formatDate(new Date(), row.timezone),
         },
         row.snapshot.data,
       );
@@ -317,7 +318,7 @@ export class SignService {
     return {
       reference: row.reference,
       documentType: row.document_type,
-      issuer: { legalName: row.legal_name, registryCode: row.registry_code },
+      issuer: { legalName: row.legal_name, registryCode: row.registry_code, timezone: row.timezone },
       signer: row.snapshot.signer,
       data: row.snapshot.data,
       blocks: this.viewBlocks(row),

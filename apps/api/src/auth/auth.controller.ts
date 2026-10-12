@@ -45,8 +45,8 @@ export class AuthController {
   }
 
   private async profile(user: SessionUser) {
-    const tenant = user.tenantId ? (await this.pool.query<{ name: string; legal_name: string }>('SELECT name, legal_name FROM tenants WHERE id = $1', [user.tenantId])).rows[0] : null;
-    return { user: { id: user.id, email: user.email, name: user.name, role: user.role, mustChangePassword: user.mustChangePassword, mfaEnabled: user.mfaEnabled }, tenant: tenant ? { name: tenant.name, legalName: tenant.legal_name } : null };
+    const tenant = user.tenantId ? (await this.pool.query<{ name: string; legal_name: string; timezone: string }>('SELECT name, legal_name, timezone FROM tenants WHERE id = $1', [user.tenantId])).rows[0] : null;
+    return { user: { id: user.id, email: user.email, name: user.name, role: user.role, mustChangePassword: user.mustChangePassword, mfaEnabled: user.mfaEnabled }, tenant: tenant ? { name: tenant.name, legalName: tenant.legal_name, timezone: tenant.timezone } : null };
   }
 
   @Post('login')

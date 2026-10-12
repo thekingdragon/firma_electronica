@@ -261,6 +261,7 @@ paths:
                 name: { type: string }
                 legalName: { type: string }
                 country: { type: string, example: PE }
+                timezone: { type: string, example: America/Lima, description: 'Zona IANA con que se muestran las horas de la corredora (por defecto America/Lima).' }
                 registryCode: { type: string, nullable: true }
                 webhookUrl: { type: string, nullable: true }
                 adminEmail: { type: string, description: 'Si se indica, crea el primer administrador de la corredora.' }
@@ -306,6 +307,7 @@ paths:
                   name: { type: string }
                   country: { type: string }
                   legalName: { type: string }
+                  timezone: { type: string, example: America/Lima }
         '401': { description: INVALID_API_KEY }
   /v1/requests:
     get:
@@ -882,7 +884,7 @@ components:
       properties:
         reference: { type: string }
         documentType: { type: string }
-        issuer: { type: object, properties: { legalName: { type: string }, registryCode: { type: string, nullable: true } } }
+        issuer: { type: object, properties: { legalName: { type: string }, registryCode: { type: string, nullable: true }, timezone: { type: string } } }
         signer: { type: object, properties: { name: { type: string }, documentType: { type: string }, documentNumber: { type: string } } }
         data: { type: object, description: Datos propios del tipo (en la carta, los seguros nombrados). }
         blocks:
@@ -904,6 +906,7 @@ components:
       required: [privacyNotice]
       properties:
         privacyNotice: { type: string, nullable: true, maxLength: 5000 }
+        timezone: { type: string, example: America/Lima, description: 'Zona IANA con que se muestran las horas (PDF, correos, panel), siempre con el desfase al lado. En PUT es opcional: si no se manda, no cambia. 422 si no es una zona que exista.' }
     Block:
       type: object
       required: [id, type]

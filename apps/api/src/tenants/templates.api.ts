@@ -244,7 +244,7 @@ export class TemplatesApiService {
     const now = new Date();
     const pdf = await renderBlocksDocument({
       reference: 'VISTA-PREVIA',
-      issuer: { legalName: tenant.legalName, registryCode: tenant.registryCode },
+      issuer: { legalName: tenant.legalName, registryCode: tenant.registryCode, timezone: tenant.timezone },
       signer: { name: 'NOMBRE APELLIDO (EJEMPLO)', documentType: 'DNI', documentNumber: '00000000' },
       data,
       content: { blocks: parsed.data.blocks },

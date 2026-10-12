@@ -7,7 +7,7 @@ import type { Tenant } from './tenants.service';
 export class TenantsController {
   /** Quién es el dueño de la clave. El panel lo usa para validar la clave al conectarse. */
   @Get()
-  me(@CurrentTenant() tenant: Tenant): { name: string; country: string; legalName: string } {
-    return { name: tenant.name, country: tenant.country, legalName: tenant.legalName };
+  me(@CurrentTenant() tenant: Tenant): { name: string; country: string; legalName: string; timezone: string } {
+    return { name: tenant.name, country: tenant.country, legalName: tenant.legalName, timezone: tenant.timezone };
   }
 }

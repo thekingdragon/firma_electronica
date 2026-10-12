@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { z } from 'zod';
 import { ApiError } from '../common/api-error';
+import { fechaHoraEnZona } from '../common/fechas';
 import { canonicalJson } from '../common/canonical-json';
 import { randomCode, sha256Hex, signTokenFor } from '../common/crypto';
 import { AppConfig, APP_CONFIG } from '../config/config';
@@ -268,7 +269,7 @@ export class RequestsService {
   /** Envía el link de firma por correo, desde el servidor SMTP del tenant. Un fallo aborta la creación. */
   private async sendLink(tenant: Tenant, input: CreateRequestInput, row: RequestRow, token: string): Promise<void> {
     const url = `${this.config.publicBaseUrl}/s/${token}`;
-    const vence = row.expires_at.toLocaleString('es-PE', { dateStyle: 'long', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC';
+    const vence = fechaHoraEnZona(row.expires_at, tenant.timezone);
     const text =
       `Hola ${input.signer.name},\n\n` +
       `${tenant.legalName} le envió un documento para firmar electrónicamente (ref. ${row.reference}).\n\n` +

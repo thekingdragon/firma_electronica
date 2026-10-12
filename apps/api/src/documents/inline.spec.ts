@@ -112,7 +112,7 @@ describe('maquetador del PDF con tramos en negrita', () => {
 describe('el PDF lleva la negrita', () => {
   const input = (text: string): RenderInput => ({
     reference: 'R-1',
-    issuer: { legalName: 'X SAC', registryCode: null },
+    issuer: { legalName: 'X SAC', registryCode: null, timezone: 'America/Lima' },
     signer: { name: 'Ana Pérez', documentType: 'DNI', documentNumber: '12345678' },
     data: {},
     content: { blocks: [{ id: 'p', type: 'paragraph', text, align: 'left', bold: false, small: false }] },

@@ -1,3 +1,4 @@
+import { fechaHoraEnZonaIso, zonaDelNavegador } from './fechas';
 import type { RequestStatus, ReviewResult } from './api';
 
 export const STATUS_LABEL: Record<RequestStatus, string> = {
@@ -36,12 +37,21 @@ export const EVENT_LABEL: Record<string, string> = {
   photo_purged: 'Foto borrada por vencer el plazo de retención',
 };
 
+/**
+ * Zona con que el panel muestra las horas: la de la corredora de quien entró (se fija al abrir la sesión). Sin corredora
+ * (el operador de la plataforma), la del navegador. Siempre con el desfase al lado: «04/10/2026 12:35 (UTC-5)».
+ */
+let panelZone: string | null = null;
+export const setPanelZone = (zona: string | null): void => {
+  panelZone = zona;
+};
+
 export function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('es-PE', { dateStyle: 'medium', timeStyle: 'short' });
+  return fechaHoraEnZonaIso(iso, panelZone ?? zonaDelNavegador());
 }
 
 export function formatDateTimeSeconds(iso: string): string {
-  return new Date(iso).toLocaleString('es-PE', { dateStyle: 'medium', timeStyle: 'medium' });
+  return fechaHoraEnZonaIso(iso, panelZone ?? zonaDelNavegador(), { segundos: true });
 }
 
 export function isPast(iso: string): boolean {

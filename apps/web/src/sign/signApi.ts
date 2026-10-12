@@ -50,7 +50,7 @@ export function powersOf(view: SigningView): PowersViewBlock | null {
 export interface SigningView {
   reference: string;
   documentType: string;
-  issuer: { legalName: string; registryCode: string | null };
+  issuer: { legalName: string; registryCode: string | null; timezone: string };
   signer: { name: string; documentType: string; documentNumber: string };
   data: { insurances?: string[] } & Record<string, unknown>;
   blocks: ViewBlock[];

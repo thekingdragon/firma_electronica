@@ -171,7 +171,16 @@ este servicio hace distinto. Migración 0012.
   por un identificador explícito; y los archivos en disco (`STORAGE_DIR`) se separan por ruta, no por RLS.
 - **Si falta `APP_DATABASE_URL`** la API corre con el dueño y RLS no se aplica: el arranque y el panel de operador lo avisan.
 
-### 6.3 Usuarios, sesiones y segundo factor del panel
+### 6.3 Fechas y zona horaria
+
+Todo lo guardado es un instante (`timestamptz`, UTC). Cada corredora tiene una **zona IANA** (`tenants.timezone`, por defecto
+`America/Lima`, editable en Ajustes y al crearla desde el panel de operador) que decide cómo se MUESTRA, igual que en Polix:
+siempre con el desfase al lado (`04/10/2026 12:35 (UTC-5)`), nunca UTC a secas. Rige el PDF (fecha del encabezado, firma y
+constancia), el correo del enlace, la página de «Documento firmado» y el panel. Un PDF ya firmado conserva la zona con que se
+firmó. La bitácora, el paquete de evidencia y los webhooks siguen en UTC (ISO 8601): son para máquinas. Las funciones están
+en `common/fechas.ts` (servidor) y `apps/web/src/fechas.ts` (navegador): son copias, si se cambia una hay que cambiar la otra.
+
+### 6.4 Usuarios, sesiones y segundo factor del panel
 
 Patrón tomado de `gestor_segurov3` (Polix), reescrito con `pg` plano: `users` (rol `OPERATOR`/`ADMIN`/`REVIEWER`, el
 operador sin `tenant_id`, forzado por `CHECK`), `refresh_tokens` con familia y revocación con motivo, `mfa_recovery_codes`
@@ -366,7 +375,7 @@ un SMTP real— más un recorrido manual completo en el navegador montado como e
   «anterior al sello de integridad».
 - **Respaldo:** `npm run backup` copia base y archivos con manifiesto, pero **no** `SECRETS_KEY` ni lo
   lleva fuera de la máquina; eso es responsabilidad de quien opera (DESPLIEGUE §8).
-- **El panel ya no entra con la clave de API** (§6.3): usuarios con rol, sesión corta con refresh en cookie HttpOnly y
+- **El panel ya no entra con la clave de API** (§6.4): usuarios con rol, sesión corta con refresh en cookie HttpOnly y
   segundo factor. La clave de API del tenant queda solo para la integración del host. Pendiente: bitácora de inicios de
   sesión en la base y confirmación de recepción del refresh.
 - **Los límites por IP son por proceso y en memoria** (se pierden al reiniciar; con varias instancias,
@@ -380,7 +389,7 @@ un SMTP real— más un recorrido manual completo en el navegador montado como e
 - **Fuera de alcance:** SMS y WhatsApp, otros tipos de documento (el servicio es genérico, pero solo
   existe la carta de nombramiento), y la integración con Polix (§10).
 - Maquetación del PDF: la constancia queda en su propia página tras el anexo, con espacio en blanco, y
-  las horas se muestran en UTC.
+  las horas se escriben en la zona de la corredora (§6.3).
 - El estado `REJECTED` de la solicitud existe en el modelo pero nada lo produce.
 
 **Para producción (esta PC es el servidor):** ver [DESPLIEGUE.md](DESPLIEGUE.md).

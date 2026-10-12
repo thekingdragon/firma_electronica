@@ -217,9 +217,9 @@ export const api = {
   idPhoto: (id: string) => fetchBlob(`/v1/requests/${id}/id-photo`),
   evidencePackage: (id: string) => fetchBlob(`/v1/requests/${id}/evidence-package`),
   idPhotoBack: (id: string) => fetchBlob(`/v1/requests/${id}/id-photo-back`),
-  settings: () => call<{ privacyNotice: string | null }>('GET', '/v1/settings').then((r) => r.data),
-  saveSettings: (body: { privacyNotice: string | null }) =>
-    call<{ privacyNotice: string | null }>('PUT', '/v1/settings', body).then((r) => r.data),
+  settings: () => call<{ privacyNotice: string | null; timezone: string }>('GET', '/v1/settings').then((r) => r.data),
+  saveSettings: (body: { privacyNotice: string | null; timezone?: string }) =>
+    call<{ privacyNotice: string | null; timezone: string }>('PUT', '/v1/settings', body).then((r) => r.data),
   templates: () => call<{ items: TemplateListItem[] }>('GET', '/v1/templates').then((r) => r.data.items),
   template: (type: string, version?: number) =>
     call<TemplateDetail>('GET', version ? `/v1/templates/${type}/versions/${version}` : `/v1/templates/${type}`).then((r) => r.data),
@@ -243,6 +243,8 @@ export interface AuthUser {
 export interface AuthTenant {
   name: string;
   legalName: string;
+  /** Zona IANA con que se muestran las horas. */
+  timezone: string;
 }
 export interface SessionResponse {
   status: 'ok';
@@ -351,7 +353,7 @@ export interface CreatedTenant {
 export const operatorApi = {
   overview: () => call<OperatorOverview>('GET', '/v1/operator/overview').then((r) => r.data),
   tenants: () => call<{ tenants: OperatorTenant[] }>('GET', '/v1/operator/tenants').then((r) => r.data.tenants),
-  createTenant: (body: { name: string; legalName: string; country: string; registryCode?: string; adminEmail?: string; adminName?: string }) =>
+  createTenant: (body: { name: string; legalName: string; country: string; timezone?: string; registryCode?: string; adminEmail?: string; adminName?: string }) =>
     call<CreatedTenant>('POST', '/v1/operator/tenants', body).then((r) => r.data),
   setActive: (id: string, active: boolean) => call<{ id: string; active: boolean }>('POST', `/v1/operator/tenants/${id}/active`, { active }).then((r) => r.data),
   verify: (id: string) => call<VerifyResult>('POST', `/v1/operator/tenants/${id}/verify`, {}).then((r) => r.data),

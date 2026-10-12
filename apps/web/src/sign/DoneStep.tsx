@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { fechaHoraEnZonaIso, zonaDelNavegador } from '../fechas';
 import { signApi } from './signApi';
 
 export function DoneStep({
@@ -6,6 +7,7 @@ export function DoneStep({
   session,
   reference,
   signedAt,
+  timezone,
   emailed,
   awaitingReview,
 }: {
@@ -13,6 +15,8 @@ export function DoneStep({
   session: string | null;
   reference: string;
   signedAt: string | null;
+  /** Zona de la corredora, con que se escribe la hora de la firma. */
+  timezone: string | null;
   emailed: boolean;
   awaitingReview: boolean;
 }) {
@@ -48,7 +52,7 @@ export function DoneStep({
         <p>
           {reference && <>Referencia <strong>{reference}</strong></>}
           {reference && signedAt && ' · '}
-          {signedAt && new Date(signedAt).toLocaleString('es-PE', { dateStyle: 'long', timeStyle: 'short' })}
+          {signedAt && fechaHoraEnZonaIso(signedAt, timezone ?? zonaDelNavegador())}
         </p>
       )}
       {awaitingReview && (
