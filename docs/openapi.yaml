@@ -160,6 +160,16 @@ paths:
       responses:
         '204': { description: Desactivado }
         '403': { description: MFA_REQUIRED }
+  /v1/users/events:
+    get:
+      summary: Bitácora de accesos y cambios de usuarios de la corredora (solo administrador con sesión)
+      description: |
+        Los eventos más recientes primero (máximo 200; `?limit=`): inicios de sesión, intentos fallidos, segundo factor, cambios
+        de contraseña y altas, bajas o cambios de rol, con la IP y el navegador. Solo se agrega: no se edita ni se borra.
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: "{ events: [{ id, at, event, email, userName, actorName, tenantName, ip, userAgent, detail }] }" }
+        '403': { description: FORBIDDEN_ROLE }
   /v1/users:
     get:
       summary: Usuarios de la corredora (solo administrador con sesión)
@@ -223,6 +233,13 @@ paths:
         '201': { description: email y temporaryPassword }
         '404': { description: TENANT_NOT_FOUND }
         '409': { description: EMAIL_TAKEN }
+  /v1/operator/auth-events:
+    get:
+      summary: Bitácora de accesos de TODAS las corredoras (o de una con ?tenantId=)
+      security: [{ bearer: [] }]
+      responses:
+        '200': { description: "{ events: [...] } como en /v1/users/events, con la corredora y quién hizo la acción" }
+        '403': { description: FORBIDDEN_ROLE }
   /v1/operator/overview:
     get:
       summary: Panel de operador — estado del servicio y totales de todas las corredoras
@@ -583,6 +600,26 @@ paths:
               schema: { type: string, format: binary }
         '404': { description: REQUEST_NOT_FOUND }
         '409': { description: NOT_SIGNED }
+  /v1/requests/{id}/purge-photos:
+    post:
+      summary: Elimina las fotos de una firma a pedido de su titular (cancelación de datos)
+      description: |
+        Borra los archivos de la selfie y del documento de identidad antes de que venza la retención y deja constancia en la
+        bitácora de quién lo hizo y por qué (`photos_deleted_on_request`). **No toca el PDF firmado** (lleva las fotos
+        incrustadas y alterarlo rompería su sello) ni las huellas ni el resto de la evidencia. Solo administrador; la clave de
+        API de la integración también puede.
+      security: [{ apiKey: [] }, { bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [reason], properties: { reason: { type: string, minLength: 5, maxLength: 500 } } }
+      responses:
+        '200': { description: "{ deletedAt, files }" }
+        '404': { description: REQUEST_NOT_FOUND }
+        '409': { description: PHOTOS_ALREADY_DELETED }
+        '422': { description: VALIDATION_ERROR (falta el motivo) }
   /v1/requests/{id}/id-photo-back:
     get:
       summary: Reverso del documento de identidad (bytes), para la revisión humana

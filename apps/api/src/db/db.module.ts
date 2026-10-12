@@ -4,7 +4,8 @@ import { Pool, PoolClient } from 'pg';
 import * as dotenv from 'dotenv';
 import { TenantContextInterceptor } from './tenant-context.interceptor';
 import { currentTenantId } from './tenant-context';
-dotenv.config();
+// En las pruebas el entorno lo arma cada prueba: el .env de desarrollo no debe colarse (APP_DATABASE_URL, TSA_URL…).
+if (process.env.NODE_ENV !== 'test') dotenv.config();
 
 /**
  * Pool de RUNTIME: lo que usan los servicios de una corredora. Se conecta con el rol sin privilegios (APP_DATABASE_URL),

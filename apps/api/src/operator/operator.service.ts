@@ -7,6 +7,7 @@ import { DB_ISOLATION, DbIsolationService, PG_OWNER } from '../db/db.module';
 import { verifyAll } from '../ops/verify-evidence';
 import { MAX_TSA_ATTEMPTS as MAX_ATTEMPTS } from '../seal/seal.service';
 import { StorageService } from '../storage/storage.service';
+import { AuthLogService } from '../auth/auth-log.service';
 import { insertUser } from '../auth/users.service';
 import { CreateTenantInput, createTenant } from '../tenants/tenants.service';
 
@@ -21,6 +22,8 @@ export interface OperatorOverview {
     /** El runtime corre con un rol sujeto a RLS (aislamiento entre corredoras en la base). */
     rlsEnforced: boolean;
     rlsReason: string | null;
+    /** No se crean solicitudes con plantillas sin revisión legal (REQUIRE_LEGAL_REVIEW). */
+    requireLegalReview: boolean;
   };
   totals: {
     tenants: number;
@@ -59,6 +62,7 @@ export class OperatorService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly storage: StorageService,
     @Inject(DB_ISOLATION) private readonly isolation: DbIsolationService,
+    private readonly authLog: AuthLogService,
   ) {}
 
   async overview(): Promise<OperatorOverview> {
@@ -92,6 +96,7 @@ export class OperatorService {
         // Sin TSA_URL no se pide el sello de tiempo; los «pendientes» solo cuentan si hay autoridad configurada.
         timestampAuthority: this.config.tsaUrl !== null,
         backgroundJobs: this.config.backgroundJobs,
+        requireLegalReview: this.config.requireLegalReview,
         ...(await this.isolation.refresh().then((s) => ({ rlsEnforced: s.rlsEnforced, rlsReason: s.reason }))),
       },
       totals: {
@@ -145,7 +150,7 @@ export class OperatorService {
   }
 
   /** Alta de una corredora, con su primer administrador si se indica (contraseña provisional, una sola vez). */
-  async create(input: CreateTenantInput & { adminEmail?: string; adminName?: string }) {
+  async create(actorId: string, input: CreateTenantInput & { adminEmail?: string; adminName?: string }) {
     if (input.adminEmail) {
       const taken = await this.pool.query('SELECT 1 FROM users WHERE lower(email) = lower($1)', [input.adminEmail.trim()]);
       if (taken.rowCount) throw new ApiError(409, 'EMAIL_TAKEN', 'Ya existe un usuario con ese correo.');
@@ -154,20 +159,24 @@ export class OperatorService {
     const admin = input.adminEmail
       ? await insertUser(this.pool, { tenantId: created.tenant.id, email: input.adminEmail, name: input.adminName?.trim() || input.name, role: 'ADMIN' })
       : null;
+    await this.authLog.record({ event: 'tenant_created', tenantId: created.tenant.id, actorId, detail: { name: created.tenant.name, timezone: created.tenant.timezone } });
+    if (admin) await this.authLog.record({ event: 'admin_added', userId: admin.id, tenantId: created.tenant.id, actorId, email: input.adminEmail });
     return { tenant: created.tenant, apiKey: created.apiKey, webhookSecret: created.webhookSecret, admin: admin ? { email: input.adminEmail, temporaryPassword: admin.temporaryPassword } : null };
   }
 
   /** Agrega un administrador a una corredora (p. ej. cuando se quedó sin acceso). */
-  async addAdmin(tenantId: string, email: string, name: string) {
+  async addAdmin(actorId: string, tenantId: string, email: string, name: string) {
     const { rowCount } = await this.pool.query('SELECT 1 FROM tenants WHERE id = $1', [tenantId]);
     if (!rowCount) throw new ApiError(404, 'TENANT_NOT_FOUND', 'No existe esa corredora.');
     const u = await insertUser(this.pool, { tenantId, email, name, role: 'ADMIN' });
+    await this.authLog.record({ event: 'admin_added', userId: u.id, tenantId, actorId });
     return { email, temporaryPassword: u.temporaryPassword };
   }
 
-  async setActive(id: string, active: boolean): Promise<void> {
+  async setActive(actorId: string, id: string, active: boolean): Promise<void> {
     const r = await this.pool.query('UPDATE tenants SET active = $2 WHERE id = $1', [id, active]);
     if (r.rowCount === 0) throw new ApiError(404, 'TENANT_NOT_FOUND', 'No existe esa corredora.');
+    await this.authLog.record({ event: 'tenant_active_changed', tenantId: id, actorId, detail: { active } });
   }
 
   /** Revisa las firmas más recientes de una corredora (tope fijo: la petición es síncrona). */

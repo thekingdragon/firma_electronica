@@ -61,6 +61,7 @@ interface SummaryRow extends RequestRow {
 interface TemplateRow {
   id: string;
   otp_required: boolean;
+  legal_reviewed: boolean;
 }
 
 interface RequestRow {
@@ -154,7 +155,7 @@ export class RequestsService {
 
     // 2. Plantilla activa del tenant para ese tipo: define la política de evidencia.
     const tpl = await this.pool.query<TemplateRow>(
-      `SELECT id, otp_required FROM document_templates
+      `SELECT id, otp_required, COALESCE((body_json->>'legalReviewed')::boolean, false) AS legal_reviewed FROM document_templates
         WHERE tenant_id = $1 AND document_type = $2 AND active`,
       [tenant.id, input.documentType],
     );
@@ -164,6 +165,10 @@ export class RequestsService {
         'TEMPLATE_NOT_FOUND',
         `El tenant no tiene una plantilla activa para ${input.documentType}.`,
       );
+    }
+    // Con REQUIRE_LEGAL_REVIEW, un texto que no pasó la revisión legal no se firma con clientes reales (ver ARQUITECTURA §8).
+    if (this.config.requireLegalReview && !tpl.rows[0].legal_reviewed) {
+      throw new ApiError(409, 'TEMPLATE_NOT_REVIEWED', `La plantilla de ${input.documentType} aún no pasó la revisión legal: publique el texto definitivo marcándola como revisada.`);
     }
     const template = tpl.rows[0];
 

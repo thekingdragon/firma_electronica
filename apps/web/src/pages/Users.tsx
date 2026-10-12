@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ApiRequestError, usersApi, type ManagedUser } from '../api';
 import { useSession } from '../auth';
+import { AuthEvents } from '../components/AuthEvents';
 import { formatDateTime } from '../format';
 
 const ROLE = { ADMIN: 'Administrador', REVIEWER: 'Revisor' } as const;
@@ -147,6 +148,10 @@ export function Users() {
           </tbody>
         </table>
       </div>
+
+      <h2>Actividad de accesos</h2>
+      <p className="muted">Quién entró, quién falló y quién cambió qué en su corredora. Solo se agrega: no se puede editar ni borrar.</p>
+      <AuthEvents key={users?.length ?? 0} load={usersApi.events} />
 
       <div className="card">
         <h2>Nuevo usuario</h2>

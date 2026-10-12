@@ -235,6 +235,18 @@ npm run operator:reset  -w api -- --email ana@empresa.com [--mfa]   (perdió la 
   automatismo**: son la prueba de la firma y el PDF lleva la foto incrustada. Decisión vigente: se conservan
   mientras el tenant no pida lo contrario; si la retención debe alcanzar también esa copia, es una decisión
   legal pendiente y debe ser un borrado explícito, no un trabajo programado.
+- **Revisión legal obligatoria (`REQUIRE_LEGAL_REVIEW=true`):** con ella encendida no se crean solicitudes con una plantilla
+  que no esté marcada como revisada (409 `TEMPLATE_NOT_REVIEWED`). Está **apagada por defecto** para no detener un
+  despliegue existente; enciéndala cuando el abogado haya aprobado el texto y se haya publicado con `legalReviewed`. El panel
+  de operador muestra si está activa.
+- **Cancelación de datos de un titular (Ley 29733):** un administrador puede **eliminar las fotos** de una firma antes de que
+  venza la retención (botón en la evidencia, `POST /v1/requests/:id/purge-photos`), indicando el motivo; queda en la bitácora
+  con su nombre. **No borra el PDF firmado** (lleva las fotos incrustadas y alterarlo rompe su sello): si el titular pide
+  también eso, es una decisión legal aparte.
+- **Bitácora de accesos** (`auth_events`): inicios de sesión y fallidos, segundo factor, cambios de contraseña y altas, bajas o
+  cambios de rol de usuarios, y las acciones del operador (crear o desactivar corredoras, agregar administradores), con IP y
+  navegador. Solo se agrega (trigger) y el runtime de las corredoras no puede ni leerla. El administrador ve la de su corredora
+  (Usuarios) y el operador la de todas. Nunca guarda contraseñas ni códigos.
 - **Sello de tiempo de un tercero:** defina `TSA_URL` (p. ej. `http://timestamp.digicert.com`, gratuita).
   Sin ella la firma funciona, pero su fecha es solo la del servidor. Si la autoridad no responde, la firma
   **no se bloquea**: el sello se reintenta en segundo plano (hasta 12 veces, con esperas crecientes) y el

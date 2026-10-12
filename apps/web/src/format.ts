@@ -31,6 +31,30 @@ export const EVENT_LABEL: Record<string, string> = {
   expired: 'La solicitud venció',
   reviewed: 'Revisión del corredor',
   photo_purged: 'Foto borrada por vencer el plazo de retención',
+  photos_deleted_on_request: 'Fotos eliminadas a pedido del titular',
+};
+
+/** Eventos de la bitácora de ACCESOS (inicios de sesión y cambios de usuarios). */
+export const AUTH_EVENT_LABEL: Record<string, string> = {
+  login_ok: 'Inicio de sesión',
+  login_failed: 'Intento fallido',
+  login_locked: 'Cuenta cerrada por intentos fallidos',
+  mfa_failed: 'Código del segundo factor incorrecto',
+  mfa_locked: 'Segundo factor cerrado por intentos fallidos',
+  mfa_enabled: 'Segundo factor activado',
+  mfa_disabled: 'Segundo factor desactivado',
+  mfa_cleared: 'Segundo factor quitado por un administrador',
+  logout: 'Salió',
+  session_reuse_detected: 'Sesión cerrada por reuso sospechoso',
+  password_changed: 'Cambió su contraseña',
+  password_reset_requested: 'Pidió recuperar la contraseña',
+  password_reset_completed: 'Recuperó su contraseña',
+  password_reset_by_admin: 'Contraseña restablecida por un administrador',
+  user_created: 'Usuario creado',
+  user_updated: 'Usuario modificado',
+  tenant_created: 'Corredora creada',
+  tenant_active_changed: 'Corredora activada o desactivada',
+  admin_added: 'Administrador agregado',
 };
 
 /**

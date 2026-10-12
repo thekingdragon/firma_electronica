@@ -213,8 +213,11 @@ de recuperación son de un uso y el restablecimiento no se salta el segundo fact
 - **Guardas:** `ApiKeyGuard` acepta sesión (Bearer) **o** clave de API (integración, equivale a ADMIN de su corredora);
   `@Roles('ADMIN')` marca crear/revocar solicitudes, plantillas y ajustes; `AccessGuard` es solo sesión; `OperatorGuard`
   exige rol OPERATOR. Quien dictamina una identidad queda registrado con su nombre y correo de la sesión.
-- **Fuera de alcance por ahora:** bitácora de inicios de sesión en base de datos (solo log del servicio), lista de
-  dispositivos/sesiones activas, y los correos de aviso («iniciaron sesión desde…»).
+- **Bitácora de accesos** (`auth_events`, migración 0014): cada inicio de sesión, fallo, cambio de segundo factor o de contraseña y
+  cada alta, baja o cambio de rol, con quién lo hizo (`actor_id`), IP y navegador (salen del contexto de la petición). Solo de adición
+  (trigger), sin claves foráneas (no depende de que el usuario siga existiendo) y sin permiso para el runtime. Registrar nunca rompe
+  la acción: si falla, queda en el log del servicio.
+- **Fuera de alcance por ahora:** lista de dispositivos/sesiones activas, y los correos de aviso («iniciaron sesión desde…»).
 
 ## 7. Seguridad y datos personales
 
@@ -390,8 +393,8 @@ un SMTP real— más un recorrido manual completo en el navegador montado como e
 - **Respaldo:** `npm run backup` copia base y archivos con manifiesto, pero **no** `SECRETS_KEY` ni lo
   lleva fuera de la máquina; eso es responsabilidad de quien opera (DESPLIEGUE §8).
 - **El panel ya no entra con la clave de API** (§6.5): usuarios con rol, sesión corta con refresh en cookie HttpOnly y
-  segundo factor. La clave de API del tenant queda solo para la integración del host. Pendiente: bitácora de inicios de
-  sesión en la base y confirmación de recepción del refresh.
+  segundo factor. La clave de API del tenant queda solo para la integración del host. Pendiente: confirmación de
+  recepción del refresh (la bitácora de accesos ya existe, §6.5).
 - **Los límites por IP son por proceso y en memoria** (se pierden al reiniciar; con varias instancias,
   cada una cuenta lo suyo). Dependen de `TRUST_PROXY`: mal puesto, todos los firmantes comparten un cupo.
 - **Los webhooks fallidos no tienen pantalla**: tras ~23 h y 9 intentos se marcan `failed_at` en

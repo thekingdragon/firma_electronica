@@ -3,7 +3,7 @@ import type { Request } from 'express';
 import { Pool } from 'pg';
 import { defer, lastValueFrom, Observable } from 'rxjs';
 import { sha256Hex } from '../common/crypto';
-import { tenantStorage } from './tenant-context';
+import { metaStorage, tenantStorage } from './tenant-context';
 
 const OWNER = 'PG_OWNER';
 const TOKEN_FORMAT = /^[A-Za-z0-9_-]{43}$/;
@@ -25,11 +25,14 @@ export class TenantContextInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (context.getType() !== 'http') return next.handle();
     const req = context.switchToHttp().getRequest<Request & { tenant?: { id: string } }>();
-    return defer(async () => {
-      const tenantId = req.tenant?.id ?? (await this.tenantOfLink(req.params?.token));
-      if (!tenantId) return lastValueFrom(next.handle(), { defaultValue: undefined });
-      return tenantStorage.run({ tenantId }, () => lastValueFrom(next.handle(), { defaultValue: undefined }));
-    });
+    const meta = { ip: req.ip ?? null, userAgent: req.get?.('user-agent') ?? null };
+    return defer(() =>
+      metaStorage.run(meta, async () => {
+        const tenantId = req.tenant?.id ?? (await this.tenantOfLink(req.params?.token));
+        if (!tenantId) return lastValueFrom(next.handle(), { defaultValue: undefined });
+        return tenantStorage.run({ tenantId }, () => lastValueFrom(next.handle(), { defaultValue: undefined }));
+      }),
+    );
   }
 
   private async tenantOfLink(token: unknown): Promise<string | null> {

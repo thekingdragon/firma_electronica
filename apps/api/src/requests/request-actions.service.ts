@@ -194,6 +194,46 @@ export class RequestActionsService {
   }
 
   /**
+   * Elimina las FOTOS de una firma antes de que venza su plazo de retención, porque el titular pidió la cancelación de sus datos
+   * (Ley 29733). Borra los archivos y deja constancia en la bitácora de quién lo hizo y por qué.
+   *
+   * Lo que NO borra, a propósito: el PDF firmado (lleva la foto incrustada y alterarlo rompería su sello y su valor como
+   * constancia), las huellas de las fotos y el resto de la evidencia. Si el titular pide también eso, es una decisión legal
+   * distinta (ver DESPLIEGUE §9) que no se resuelve con un botón.
+   */
+  async purgePhotos(tenant: Tenant, id: string, by: string, body: unknown): Promise<{ deletedAt: string; files: number }> {
+    this.checkId(id);
+    const parsed = z.object({ reason: z.string().trim().min(5, 'Indique el motivo (al menos 5 caracteres).').max(500) }).strict().safeParse(body);
+    if (!parsed.success) {
+      throw new ApiError(422, 'VALIDATION_ERROR', 'Indique el motivo de la eliminación.', {
+        issues: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+      });
+    }
+    const { rows } = await this.pool.query<{ photo_path: string | null; id_photo_path: string | null; id_back_path: string | null }>(
+      `SELECT e.photo_path, e.id_photo_path, e.id_back_path
+         FROM signature_evidence e JOIN signature_requests r ON r.id = e.request_id
+        WHERE r.id = $1 AND r.tenant_id = $2`,
+      [id, tenant.id],
+    );
+    const row = rows[0];
+    if (!row) throw new ApiError(404, 'REQUEST_NOT_FOUND', 'Solicitud no encontrada.');
+    const paths = [row.photo_path, row.id_photo_path, row.id_back_path].filter((p): p is string => Boolean(p));
+    if (paths.length === 0) throw new ApiError(409, 'PHOTOS_ALREADY_DELETED', 'Esta firma ya no conserva fotos.');
+    // Primero los archivos y después la fila: si algo falla en medio, se puede repetir (borrar lo que ya no está no es un error).
+    for (const p of paths) await this.storage.remove(p);
+    const upd = await this.pool.query<{ photo_deleted_at: Date }>(
+      `UPDATE signature_evidence SET photo_path = NULL, id_photo_path = NULL, id_back_path = NULL, photo_deleted_at = now()
+        WHERE request_id = $1 RETURNING photo_deleted_at`,
+      [id],
+    );
+    await this.pool.query(`INSERT INTO access_log (request_id, event, detail) VALUES ($1, 'photos_deleted_on_request', $2)`, [
+      id,
+      JSON.stringify({ by, reason: parsed.data.reason, files: paths.length }),
+    ]);
+    return { deletedAt: upd.rows[0].photo_deleted_at.toISOString(), files: paths.length };
+  }
+
+  /**
    * Dictamen del corredor sobre la evidencia (fase 1: revisión humana). No cambia el estado de la firma;
    * se puede corregir un dictamen anterior y cada cambio queda en la bitácora y se avisa al host.
    */

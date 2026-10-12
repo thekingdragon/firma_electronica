@@ -13,6 +13,14 @@ export interface TenantContext {
 
 export const tenantStorage = new AsyncLocalStorage<TenantContext>();
 
+/** Desde dónde llega la petición, para la bitácora de accesos. Lo fija el interceptor global. */
+export interface RequestMeta {
+  ip: string | null;
+  userAgent: string | null;
+}
+export const metaStorage = new AsyncLocalStorage<RequestMeta>();
+export const requestMeta = (): RequestMeta | null => metaStorage.getStore() ?? null;
+
 export const currentTenantId = (): string | null => tenantStorage.getStore()?.tenantId ?? null;
 
 /** Ejecuta `fn` (y todo lo que arranque desde ahí, incluso después de responder) en el contexto de esa corredora. */

@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
 import { ApiError } from '../common/api-error';
 import { PG_OWNER } from '../db/db.module';
+import { AuthLogService } from './auth-log.service';
 import { AuthService } from './auth.service';
 import { MfaService } from './mfa.service';
 import { hashPassword, temporaryPassword } from './passwords';
@@ -47,6 +48,7 @@ export class UsersService {
     @Inject(PG_OWNER) private readonly pool: Pool,
     private readonly auth: AuthService,
     private readonly mfa: MfaService,
+    private readonly authLog: AuthLogService,
   ) {}
 
   async list(tenantId: string): Promise<UserRow[]> {
@@ -68,8 +70,10 @@ export class UsersService {
     }));
   }
 
-  create(tenantId: string, input: { email: string; name: string; role: 'ADMIN' | 'REVIEWER' }) {
-    return insertUser(this.pool, { tenantId, ...input });
+  async create(tenantId: string, actorId: string, input: { email: string; name: string; role: 'ADMIN' | 'REVIEWER' }) {
+    const u = await insertUser(this.pool, { tenantId, ...input });
+    await this.authLog.record({ event: 'user_created', userId: u.id, tenantId, actorId, detail: { role: input.role } });
+    return u;
   }
 
   private async target(tenantId: string, id: string) {
@@ -89,17 +93,19 @@ export class UsersService {
     }
     await this.pool.query('UPDATE users SET role = COALESCE($3, role), active = COALESCE($4, active) WHERE id = $1 AND tenant_id = $2', [id, tenantId, changes.role ?? null, changes.active ?? null]);
     if (changes.active === false || (changes.role && changes.role !== t.role)) await this.auth.revokeAllSessions(id);
+    await this.authLog.record({ event: 'user_updated', userId: id, tenantId, actorId, detail: { ...(changes.role ? { role: { from: t.role, to: changes.role } } : {}), ...(changes.active !== undefined ? { active: changes.active } : {}) } });
   }
 
-  async resetPassword(tenantId: string, id: string): Promise<{ temporaryPassword: string }> {
+  async resetPassword(tenantId: string, actorId: string, id: string): Promise<{ temporaryPassword: string }> {
     await this.target(tenantId, id);
     const temp = temporaryPassword();
     await this.auth.setPassword(id, temp, true);
+    await this.authLog.record({ event: 'password_reset_by_admin', userId: id, tenantId, actorId });
     return { temporaryPassword: temp };
   }
 
-  async resetMfa(tenantId: string, id: string): Promise<void> {
+  async resetMfa(tenantId: string, actorId: string, id: string): Promise<void> {
     await this.target(tenantId, id);
-    await this.mfa.clear(id);
+    await this.mfa.clear(id, actorId);
   }
 }

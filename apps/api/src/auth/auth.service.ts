@@ -3,6 +3,7 @@ import { Pool, PoolClient } from 'pg';
 import { ApiError } from '../common/api-error';
 import { APP_CONFIG, AppConfig } from '../config/config';
 import { PG_OWNER } from '../db/db.module';
+import { AuthLogService } from './auth-log.service';
 import { dummyHash, hashPassword, passwordProblem, verifyPassword } from './passwords';
 import { SessionUser, USER_COLUMNS, toSessionUser } from './session';
 import { ACCESS_MINUTES, PENDING_MINUTES, hashToken, newOpaqueToken, signToken } from './tokens';
@@ -50,6 +51,7 @@ export class AuthService {
   constructor(
     @Inject(PG_OWNER) private readonly pool: Pool,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly authLog: AuthLogService,
   ) {}
 
   // ------------------------------------------------------------------ entrada
@@ -67,10 +69,12 @@ export class AuthService {
     const hidden = u?.role === 'OPERATOR' && viaTunnel && !this.config.operatorAllowRemote;
     if (!u || !u.active || u.tenant_active === false || hidden) {
       await verifyPassword(await dummyHash(), password);
+      await this.authLog.record({ event: 'login_failed', email: email.trim(), detail: { reason: 'unknown_or_inactive' } });
       throw this.badCredentials();
     }
     if (u.locked_until && u.locked_until.getTime() > Date.now()) {
       const minutes = Math.max(1, Math.ceil((u.locked_until.getTime() - Date.now()) / 60_000));
+      await this.authLog.record({ event: 'login_locked', userId: u.id, detail: { attemptWhileLocked: true } });
       throw new ApiError(429, 'ACCOUNT_LOCKED', `Demasiados intentos fallidos. Espere ${minutes} min e intente de nuevo.`, { retryAfterSeconds: minutes * 60 });
     }
     if (!(await verifyPassword(u.password_hash, password))) {
@@ -81,13 +85,16 @@ export class AuthService {
         [u.id, lock ? 0 : failed, lock, LOCK_MINUTES],
       );
       if (lock) this.logger.warn(`Cuenta ${u.id} cerrada ${LOCK_MINUTES} min por ${MAX_FAILED_LOGINS} fallos de contraseña (IP ${ip}).`);
+      await this.authLog.record({ event: lock ? 'login_locked' : 'login_failed', userId: u.id, detail: lock ? { minutes: LOCK_MINUTES, failures: MAX_FAILED_LOGINS } : { reason: 'password', failures: failed } });
       throw this.badCredentials();
     }
     await this.pool.query('UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id = $1', [u.id]);
 
     if (u.mfa_enabled_at) return { status: 'mfa_required', pendingToken: signToken(this.config.tokenSecret, 'mfa-pending', u.id, PENDING_MINUTES, { stage: 'verify' }) };
     if (mfaRequiredFor(u.role)) return { status: 'mfa_setup_required', pendingToken: signToken(this.config.tokenSecret, 'mfa-pending', u.id, PENDING_MINUTES, { stage: 'setup' }) };
-    return { status: 'ok', session: await this.issueSession(u.id, ip) };
+    const session = await this.issueSession(u.id, ip);
+    await this.authLog.record({ event: 'login_ok', userId: u.id, detail: { mfa: false } });
+    return { status: 'ok', session };
   }
 
   private badCredentials(): ApiError {
@@ -160,6 +167,7 @@ export class AuthService {
           await client.query(`UPDATE refresh_tokens SET revoked_at = now(), revoked_reason = 'reuse' WHERE family_id = $1 AND revoked_at IS NULL`, [found.family_id]);
           await client.query('COMMIT');
           this.logger.warn(`Reuso de refresh token: se cerró la sesión ${found.family_id} del usuario ${found.user_id} (IP ${ip}).`);
+          await this.authLog.record({ event: 'session_reuse_detected', userId: found.user_id });
           throw this.invalidRefresh();
         }
         await client.query('ROLLBACK');
@@ -187,11 +195,13 @@ export class AuthService {
 
   async logout(refreshToken: string | undefined): Promise<void> {
     if (!refreshToken) return;
-    await this.pool.query(
+    const r = await this.pool.query<{ user_id: string }>(
       `UPDATE refresh_tokens SET revoked_at = now(), revoked_reason = 'logout'
-        WHERE revoked_at IS NULL AND family_id = (SELECT family_id FROM refresh_tokens WHERE token_hash = $1)`,
+        WHERE revoked_at IS NULL AND family_id = (SELECT family_id FROM refresh_tokens WHERE token_hash = $1)
+        RETURNING user_id`,
       [hashToken(refreshToken)],
     );
+    if (r.rows[0]) await this.authLog.record({ event: 'logout', userId: r.rows[0].user_id });
   }
 
   // --------------------------------------------------------------- contraseña
@@ -206,6 +216,7 @@ export class AuthService {
     const problem = passwordProblem(next, rows[0].email);
     if (problem) throw new ApiError(422, 'VALIDATION_ERROR', problem);
     await this.setPassword(userId, next, false);
+    await this.authLog.record({ event: 'password_changed', userId });
     return this.issueSession(userId, ip);
   }
 

@@ -7,6 +7,7 @@ import { ApiError } from '../common/api-error';
 import { open, seal } from '../common/secret-box';
 import { APP_CONFIG, AppConfig } from '../config/config';
 import { PG_OWNER } from '../db/db.module';
+import { AuthLogService } from './auth-log.service';
 import { AuthService, IssuedSession, mfaRequiredFor } from './auth.service';
 import { verifyPassword } from './passwords';
 import { formatSecretForHuman, generateSecret, otpauthUri, verifyTotp } from './totp';
@@ -38,6 +39,7 @@ export class MfaService {
     @Inject(PG_OWNER) private readonly pool: Pool,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly auth: AuthService,
+    private readonly authLog: AuthLogService,
   ) {}
 
   private key(): Buffer {
@@ -90,6 +92,7 @@ export class MfaService {
     } finally {
       client.release();
     }
+    await this.authLog.record({ event: 'mfa_enabled', userId });
     return { recoveryCodes: codes.map((c) => `${c.slice(0, 5)}-${c.slice(5)}`) };
   }
 
@@ -131,10 +134,13 @@ export class MfaService {
       const lock = failed >= MAX_FAILED;
       await this.pool.query('UPDATE users SET mfa_failed = $2, mfa_locked_until = CASE WHEN $3 THEN now() + make_interval(mins => $4) ELSE mfa_locked_until END WHERE id = $1', [userId, lock ? 0 : failed, lock, LOCK_MINUTES]);
       if (lock) this.logger.warn(`Segundo factor del usuario ${userId} cerrado ${LOCK_MINUTES} min por ${MAX_FAILED} fallos (IP ${ip}).`);
+      await this.authLog.record({ event: lock ? 'mfa_locked' : 'mfa_failed', userId, detail: { recoveryCode: Boolean(input.recoveryCode) } });
       throw new ApiError(401, 'INVALID_CODE', input.recoveryCode ? 'El código de recuperación no es válido o ya se usó.' : 'El código no es correcto.');
     }
     await this.pool.query('UPDATE users SET mfa_failed = 0, mfa_locked_until = NULL WHERE id = $1', [userId]);
-    return this.auth.issueSession(userId, ip);
+    const session = await this.auth.issueSession(userId, ip);
+    await this.authLog.record({ event: 'login_ok', userId, detail: { mfa: true, recoveryCode: Boolean(input.recoveryCode) } });
+    return session;
   }
 
   private async consumeRecoveryCode(userId: string, raw: string): Promise<boolean> {
@@ -166,12 +172,14 @@ export class MfaService {
       throw new ApiError(401, 'INVALID_CODE', 'El código no es correcto.');
     }
     await this.clear(userId);
+    await this.authLog.record({ event: 'mfa_disabled', userId });
   }
 
   /** Quita el factor a otro usuario (perdió el teléfono y los códigos). Lo decide un administrador. */
-  async clear(userId: string): Promise<void> {
+  async clear(userId: string, actorId?: string): Promise<void> {
     await this.pool.query('UPDATE users SET mfa_secret_enc = NULL, mfa_enabled_at = NULL, mfa_last_step = NULL, mfa_failed = 0, mfa_locked_until = NULL WHERE id = $1', [userId]);
     await this.pool.query('DELETE FROM mfa_recovery_codes WHERE user_id = $1', [userId]);
     await this.auth.revokeAllSessions(userId);
+    if (actorId) await this.authLog.record({ event: 'mfa_cleared', userId, actorId });
   }
 }

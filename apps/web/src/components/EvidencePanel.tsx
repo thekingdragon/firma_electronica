@@ -104,6 +104,8 @@ export function EvidencePanel({
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [pkgBusy, setPkgBusy] = useState(false);
+  const [purgeBusy, setPurgeBusy] = useState(false);
+  const { user } = useSession();
 
   const load = useCallback(() => {
     api
@@ -124,6 +126,30 @@ export function EvidencePanel({
       setPdfError(e instanceof Error ? e.message : 'No se pudo descargar el paquete.');
     } finally {
       setPkgBusy(false);
+    }
+  }
+
+  /** Cancelación de datos a pedido del titular: borra las fotos, NO el PDF firmado (ver la advertencia del cuadro). */
+  async function purgePhotos() {
+    const reason = window.prompt(
+      'Elimina las fotos de esta firma (selfie y documento de identidad) a pedido de su titular.\n\n' +
+        'El PDF firmado NO se modifica: lleva las fotos incrustadas y alterarlo rompería su sello. Si el titular también pide eso, es una decisión legal aparte.\n\n' +
+        'No se puede deshacer. Escriba el motivo (queda en la bitácora con su nombre):',
+    );
+    if (reason === null) return;
+    if (reason.trim().length < 5) {
+      setPdfError('Indique el motivo (al menos 5 caracteres).');
+      return;
+    }
+    setPurgeBusy(true);
+    setPdfError(null);
+    try {
+      await api.purgePhotos(requestId, reason.trim());
+      load();
+    } catch (e) {
+      setPdfError(e instanceof Error ? e.message : 'No se pudieron eliminar las fotos.');
+    } finally {
+      setPurgeBusy(false);
     }
   }
 
@@ -240,6 +266,13 @@ export function EvidencePanel({
             </div>
           )}
         </div>
+        {user.role === 'ADMIN' && [ev.photo, ev.idPhoto, ev.idPhotoBack].some((p) => p && !p.deletedAt) && (
+          <div className="actions">
+            <button type="button" className="btn btn-danger-outline" onClick={() => void purgePhotos()} disabled={purgeBusy}>
+              {purgeBusy ? 'Eliminando…' : 'Eliminar las fotos (cancelación de datos)'}
+            </button>
+          </div>
+        )}
         <div className="review-check">
           <div>
             {ev.challenge && (

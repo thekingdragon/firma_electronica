@@ -216,6 +216,7 @@ export const api = {
   document: (id: string) => fetchBlob(`/v1/requests/${id}/document`),
   photo: (id: string) => fetchBlob(`/v1/requests/${id}/photo`),
   idPhoto: (id: string) => fetchBlob(`/v1/requests/${id}/id-photo`),
+  purgePhotos: (id: string, reason: string) => call<{ deletedAt: string; files: number }>('POST', `/v1/requests/${id}/purge-photos`, { reason }).then((r) => r.data),
   evidencePackage: (id: string) => fetchBlob(`/v1/requests/${id}/evidence-package`),
   idPhotoBack: (id: string) => fetchBlob(`/v1/requests/${id}/id-photo-back`),
   settings: () => call<{ privacyNotice: string | null; timezone: string }>('GET', '/v1/settings').then((r) => r.data),
@@ -298,18 +299,33 @@ export const authApi = {
   mfaDisable: (password: string, code: string) => call<void>('POST', '/v1/auth/mfa/disable', { password, code }).then(() => undefined),
 };
 
+/** Un renglón de la bitácora de accesos. */
+export interface AuthEventRow {
+  id: string;
+  at: string;
+  event: string;
+  email: string | null;
+  userName: string | null;
+  actorName: string | null;
+  tenantName: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  detail: Record<string, unknown> | null;
+}
+
 export const usersApi = {
   list: () => call<{ users: ManagedUser[] }>('GET', '/v1/users').then((r) => r.data.users),
   create: (body: { email: string; name: string; role: 'ADMIN' | 'REVIEWER' }) =>
     call<{ id: string; temporaryPassword: string }>('POST', '/v1/users', body).then((r) => r.data),
   update: (id: string, body: { role?: 'ADMIN' | 'REVIEWER'; active?: boolean }) => call<void>('PATCH', `/v1/users/${id}`, body).then(() => undefined),
   resetPassword: (id: string) => call<{ temporaryPassword: string }>('POST', `/v1/users/${id}/reset-password`, {}).then((r) => r.data),
+  events: () => call<{ events: AuthEventRow[] }>('GET', '/v1/users/events').then((r) => r.data.events),
   resetMfa: (id: string) => call<void>('POST', `/v1/users/${id}/reset-mfa`, {}).then(() => undefined),
 };
 
 // ---- Panel de operador ----
 export interface OperatorOverview {
-  service: { database: boolean; storageWritable: boolean; secretsKey: boolean; sealKey: boolean; timestampAuthority: boolean; backgroundJobs: boolean; rlsEnforced: boolean; rlsReason: string | null };
+  service: { database: boolean; storageWritable: boolean; secretsKey: boolean; sealKey: boolean; timestampAuthority: boolean; backgroundJobs: boolean; rlsEnforced: boolean; rlsReason: string | null; requireLegalReview: boolean };
   totals: {
     tenants: number;
     activeTenants: number;
@@ -358,6 +374,7 @@ export const operatorApi = {
     call<CreatedTenant>('POST', '/v1/operator/tenants', body).then((r) => r.data),
   setActive: (id: string, active: boolean) => call<{ id: string; active: boolean }>('POST', `/v1/operator/tenants/${id}/active`, { active }).then((r) => r.data),
   verify: (id: string) => call<VerifyResult>('POST', `/v1/operator/tenants/${id}/verify`, {}).then((r) => r.data),
+  events: (tenantId?: string) => call<{ events: AuthEventRow[] }>('GET', `/v1/operator/auth-events${tenantId ? `?tenantId=${tenantId}` : ''}`).then((r) => r.data.events),
   addAdmin: (id: string, email: string, name: string) =>
     call<{ email: string; temporaryPassword: string }>('POST', `/v1/operator/tenants/${id}/admin`, { email, name }).then((r) => r.data),
 };

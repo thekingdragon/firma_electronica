@@ -5,6 +5,7 @@ import { APP_CONFIG, AppConfig } from '../config/config';
 import { PG_OWNER } from '../db/db.module';
 import { withTenant } from '../db/tenant-context';
 import { MailService } from '../mail/mail.service';
+import { AuthLogService } from './auth-log.service';
 import { AuthService } from './auth.service';
 import { passwordProblem } from './passwords';
 import { hashToken, newOpaqueToken } from './tokens';
@@ -29,6 +30,7 @@ export class PasswordResetService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly mail: MailService,
     private readonly auth: AuthService,
+    private readonly authLog: AuthLogService,
   ) {}
 
   async request(email: string): Promise<void> {
@@ -38,6 +40,7 @@ export class PasswordResetService {
       [email.trim()],
     );
     const u = rows[0];
+    await this.authLog.record({ event: 'password_reset_requested', userId: u?.id ?? null, email: email.trim(), detail: { known: Boolean(u?.tenant_id) } });
     if (!u || !u.tenant_id) return;
     // Un solo enlace vivo por cuenta: pedir otro anula el anterior.
     await this.pool.query('UPDATE password_resets SET used_at = now() WHERE user_id = $1 AND used_at IS NULL', [u.id]);
@@ -74,5 +77,6 @@ export class PasswordResetService {
     const used = await this.pool.query('UPDATE password_resets SET used_at = now() WHERE id = $1 AND used_at IS NULL', [r.id]);
     if (used.rowCount !== 1) throw new ApiError(400, 'INVALID_RESET_TOKEN', 'El enlace no es válido o venció. Pida uno nuevo.');
     await this.auth.setPassword(r.user_id, password, false);
+    await this.authLog.record({ event: 'password_reset_completed', userId: r.user_id });
   }
 }

@@ -1,7 +1,10 @@
-import { Body, Controller, Get, HttpCode, Logger, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Logger, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
 import { ApiError } from '../common/api-error';
 import { esZonaValida } from '../common/fechas';
+import { AuthLogService } from '../auth/auth-log.service';
+import { CurrentUser } from '../auth/access.guard';
+import type { SessionUser } from '../auth/session';
 import { OperatorGuard } from './operator.guard';
 import { OperatorService } from './operator.service';
 
@@ -33,12 +36,21 @@ function parse<T>(schema: z.ZodType<T>, body: unknown, message: string): T {
 @UseGuards(OperatorGuard)
 export class OperatorController {
   private readonly logger = new Logger('Operador');
-  constructor(private readonly operator: OperatorService) {}
+  constructor(
+    private readonly operator: OperatorService,
+    private readonly authLog: AuthLogService,
+  ) {}
 
   /** Sirve también para validar la clave al conectarse. */
   @Get('overview')
   overview() {
     return this.operator.overview();
+  }
+
+  /** Accesos y cambios de usuarios de TODAS las corredoras (o de una, con ?tenantId=), los más recientes primero. */
+  @Get('auth-events')
+  async events(@Query('tenantId') tenantId?: string, @Query('limit') limit?: string) {
+    return { events: await this.authLog.recent({ tenantId: tenantId || undefined, limit: limit ? Number(limit) : 100 }) };
   }
 
   @Get('tenants')
@@ -48,26 +60,26 @@ export class OperatorController {
 
   /** Alta de una corredora. La clave de API se devuelve UNA vez: en la base solo queda su hash. */
   @Post('tenants')
-  async create(@Body() body: unknown) {
+  async create(@CurrentUser() me: SessionUser, @Body() body: unknown) {
     const input = parse(createSchema, body, 'Los datos de la corredora no son válidos.');
-    const created = await this.operator.create(input);
+    const created = await this.operator.create(me.id, input);
     this.logger.warn(`Corredora creada: ${created.tenant.name} (${created.tenant.id})`);
     return created;
   }
 
   /** Nuevo administrador de una corredora; la contraseña provisional se devuelve UNA vez. */
   @Post('tenants/:id/admin')
-  async addAdmin(@Param('id', new ParseUUIDPipe()) id: string, @Body() body: unknown) {
+  async addAdmin(@CurrentUser() me: SessionUser, @Param('id', new ParseUUIDPipe()) id: string, @Body() body: unknown) {
     const b = parse(adminSchema, body, 'Indique correo y nombre.');
     this.logger.warn(`Administrador agregado a la corredora ${id}: ${b.email}`);
-    return this.operator.addAdmin(id, b.email, b.name);
+    return this.operator.addAdmin(me.id, id, b.email, b.name);
   }
 
   @Post('tenants/:id/active')
   @HttpCode(200)
-  async setActive(@Param('id', new ParseUUIDPipe()) id: string, @Body() body: unknown) {
+  async setActive(@CurrentUser() me: SessionUser, @Param('id', new ParseUUIDPipe()) id: string, @Body() body: unknown) {
     const { active } = parse(activeSchema, body, 'Indique active: true o false.');
-    await this.operator.setActive(id, active);
+    await this.operator.setActive(me.id, id, active);
     this.logger.warn(`Corredora ${id} ${active ? 'activada' : 'DESACTIVADA'}`);
     return { id, active };
   }

@@ -71,6 +71,15 @@ export class RequestsController {
     return this.actions.revoke(tenant, id);
   }
 
+  /** Elimina las fotos de una firma a pedido de su titular (cancelación de datos). El PDF firmado no se toca. */
+  @Post(':id/purge-photos')
+  @Roles('ADMIN')
+  @HttpCode(200)
+  purgePhotos(@CurrentTenant() tenant: Tenant, @Param('id') id: string, @Body() body: unknown, @Req() req: Request & { user?: SessionUser }) {
+    const by = req.user ? `${req.user.name} <${req.user.email}>` : 'clave de API';
+    return this.actions.purgePhotos(tenant, id, by, body);
+  }
+
   /** Todo lo registrado de una firma, para la revisión humana. */
   @Get(':id/evidence')
   evidence(@CurrentTenant() tenant: Tenant, @Param('id') id: string): Promise<EvidenceView> {

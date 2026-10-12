@@ -30,6 +30,7 @@ export async function resetDatabase(url: string): Promise<Pool> {
   await pool.query('TRUNCATE tenants CASCADE');
   // Los operadores no cuelgan de ningún tenant: no los alcanza el CASCADE de arriba.
   await pool.query('TRUNCATE users CASCADE');
+  await pool.query('TRUNCATE auth_events');
   // La llave de sello va cifrada con SECRETS_KEY y las pruebas usan una distinta cada vez: la anterior no serviría.
   await pool.query('TRUNCATE seal_keys');
   // El rol de runtime (sujeto a RLS) con que corre la aplicación en las pruebas. Los roles son de todo el servidor: se crea
@@ -59,6 +60,13 @@ export async function makeApp(env: Record<string, string>): Promise<INestApplica
     env = { ...env, APP_DATABASE_URL: u.toString() };
   }
   const saved: Record<string, string | undefined> = {};
+  // Lo que el .env de desarrollo define y la prueba no pidió se apaga: una prueba nunca debe salir a Internet ni abrir lo que no es suyo.
+  for (const k of ['TSA_URL', 'OPERATOR_ALLOW_REMOTE', 'REQUIRE_LEGAL_REVIEW', 'COOKIE_SECURE']) {
+    if (!(k in env)) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+  }
   for (const [k, v] of Object.entries(env)) {
     saved[k] = process.env[k];
     process.env[k] = v;

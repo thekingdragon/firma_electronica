@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } fr
 import { NavLink } from 'react-router-dom';
 import { ApiRequestError, operatorApi, type CreatedTenant, type OperatorOverview, type OperatorTenant, type VerifyResult } from '../api';
 import { useAuth, useSession } from '../auth';
+import { AuthEvents } from '../components/AuthEvents';
 import { formatDateTime } from '../format';
 
 /**
@@ -229,6 +230,9 @@ export function Operator() {
                 <li>
                   <Dot ok={s.rlsEnforced} warn /> Aislamiento entre corredoras en la base (RLS) {s.rlsEnforced ? 'activo' : `NO activo: ${s.rlsReason ?? 'sin detalle'}`}
                 </li>
+                <li>
+                  <Dot ok={s.requireLegalReview} warn /> Revisión legal obligatoria para crear solicitudes {s.requireLegalReview ? 'activa' : 'apagada (se puede firmar con textos en borrador)'}
+                </li>
               </ul>
             </div>
 
@@ -308,6 +312,10 @@ export function Operator() {
         <p className="hint">«Verificar firmas» revisa las últimas 100 de la corredora: PDF, sello, sello de tiempo y bitácora.</p>
 
         <NewTenant onCreated={() => void load()} />
+
+        <h2>Actividad de accesos</h2>
+        <p className="muted">Inicios de sesión, intentos fallidos y cambios de usuarios de todas las corredoras. Solo se agrega: no se puede editar ni borrar.</p>
+        <AuthEvents key={tenants.length} load={() => operatorApi.events()} showTenant />
       </main>
     </>
   );

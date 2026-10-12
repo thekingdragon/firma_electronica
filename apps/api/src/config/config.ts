@@ -49,6 +49,9 @@ const envSchema = z.object({
   WEB_DIST_DIR: z.string().min(1).optional(),
   // Autoridad de sellado de tiempo (RFC 3161). Sin ella las firmas se sellan igual, pero sin hora de un tercero.
   TSA_URL: z.url().optional(),
+  // Si es true, no se crean solicitudes con una plantilla que no haya pasado la revisión legal (`legalReviewed`). Apagado por
+  // defecto para no detener un despliegue existente; se enciende cuando los textos definitivos ya están publicados.
+  REQUIRE_LEGAL_REVIEW: boolean(false),
   // Por defecto el panel de operador rechaza lo que llegue por el túnel de Cloudflare (solo se abre desde esta máquina o la red local).
   OPERATOR_ALLOW_REMOTE: boolean(false),
 });
@@ -70,6 +73,7 @@ export type AppConfig = {
   webDistDir: string | null;
   tsaUrl: string | null;
   operatorAllowRemote: boolean;
+  requireLegalReview: boolean;
 };
 
 /** Lee y valida el entorno. Falla al arrancar, no en la primera petición. */
@@ -104,5 +108,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     webDistDir: e.WEB_DIST_DIR ? resolve(e.WEB_DIST_DIR) : null,
     tsaUrl: e.TSA_URL ?? null,
     operatorAllowRemote: e.OPERATOR_ALLOW_REMOTE,
+    requireLegalReview: e.REQUIRE_LEGAL_REVIEW,
   };
 }
