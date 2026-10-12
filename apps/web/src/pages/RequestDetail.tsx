@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { documentTypeName, getDocumentTypeUi } from '../document-types';
 import { Link, useParams } from 'react-router-dom';
 import { api, ApiRequestError, type SignatureRequest } from '../api';
 import { useSession } from '../auth';
 import { EvidencePanel } from '../components/EvidencePanel';
 import { LinkBox } from '../components/LinkBox';
 import { ReviewBadge, StatusBadge } from '../components/StatusBadge';
-import { DOCUMENT_TYPE_LABEL, formatDateTime, isPast } from '../format';
+import { formatDateTime, isPast } from '../format';
 
 export function RequestDetail() {
   const { id = '' } = useParams();
@@ -53,23 +54,12 @@ export function RequestDetail() {
       <div className="card">
         <dl className="details">
           <dt>Documento</dt>
-          <dd>{DOCUMENT_TYPE_LABEL[req.documentType] ?? req.documentType}</dd>
+          <dd>{documentTypeName(req.documentType)}</dd>
           <dt>Firmante</dt>
           <dd>{req.signerName}</dd>
           <dt>Referencia interna</dt>
           <dd>{req.externalRef}</dd>
-          {req.data.insurances && (
-            <>
-              <dt>Seguros nombrados</dt>
-              <dd>
-                <ul>
-                  {req.data.insurances.map((s) => (
-                    <li key={s}>{s}</li>
-                  ))}
-                </ul>
-              </dd>
-            </>
-          )}
+          {getDocumentTypeUi(req.documentType)?.detail(req.data)}
           <dt>Creada</dt>
           <dd>{formatDateTime(req.createdAt)}</dd>
           <dt>Vence</dt>
@@ -87,7 +77,7 @@ export function RequestDetail() {
             {req.deliveryMode === 'SERVICE' ? (
               <p>El enlace se envió por correo al firmante. Si no le llegó, revoque esta solicitud y cree otra.</p>
             ) : req.signUrl ? (
-              <LinkBox url={req.signUrl} signerName={req.signerName} />
+              <LinkBox documentName={documentTypeName(req.documentType)} url={req.signUrl} signerName={req.signerName} />
             ) : null}
           </div>
           <RevokeCard requestId={req.id} onRevoked={load} />

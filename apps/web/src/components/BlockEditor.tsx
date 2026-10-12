@@ -214,7 +214,7 @@ function Fields({ block, onChange }: { block: Block; onChange: (b: Block) => voi
  * Editor de la lista de bloques de un documento. Subir, bajar, quitar y agregar; cada bloque se edita con los
  * campos de su tipo. No guarda nada: quien lo usa decide cuándo publicar.
  */
-export function BlockEditor({ blocks, onChange }: { blocks: Block[]; onChange: (b: Block[]) => void }) {
+export function BlockEditor({ blocks, onChange, defaultListKey }: { blocks: Block[]; onChange: (b: Block[]) => void; defaultListKey?: string }) {
   const [adding, setAdding] = useState<BlockType>('paragraph');
 
   const used = new Set(blocks.map((b) => b.type));
@@ -264,7 +264,7 @@ export function BlockEditor({ blocks, onChange }: { blocks: Block[]; onChange: (
             ))}
           </select>
         </label>
-        <button type="button" className="btn" onClick={() => onChange([...blocks, newBlock(available.includes(adding) ? adding : available[0])])} disabled={available.length === 0}>
+        <button type="button" className="btn" onClick={() => onChange([...blocks, newBlock(available.includes(adding) ? adding : available[0], defaultListKey)])} disabled={available.length === 0}>
           + Agregar bloque
         </button>
       </div>

@@ -48,7 +48,7 @@ export const SINGLE_BLOCKS: readonly BlockType[] = ['issuerHeader', 'powers', 's
 
 export const BLOCK_HELP: Partial<Record<BlockType, string>> = {
   issuerHeader: 'Razón social, código de registro y fecha, arriba a la izquierda y a la derecha.',
-  dataList: 'Lista que llega con la solicitud (en la carta: los seguros nombrados, dato «insurances»).',
+  dataList: 'Lista que llega con la solicitud, tomada del dato cuyo nombre se indica en el bloque.',
   powers: 'El firmante marca cuáles otorga. Solo puede haber un bloque de facultades.',
   consent: 'Casilla aparte que el firmante marca. Obligatoria: sin marcarla no puede firmar. Opcional: queda registrado si la marcó o no. Cada una se guarda por separado.',
   signerBox: 'Nombre y documento del firmante, tomados de la solicitud.',
@@ -63,7 +63,8 @@ export function newId(): string {
   return 'b' + Array.from(a, (x) => x.toString(36).padStart(2, '0')).join('');
 }
 
-export function newBlock(type: BlockType): Block {
+/** `defaultListKey`: dato de la solicitud que alimenta un bloque «lista de datos» nuevo (lo define el tipo de documento). */
+export function newBlock(type: BlockType, defaultListKey = ''): Block {
   const id = newId();
   switch (type) {
     case 'issuerHeader':
@@ -77,7 +78,7 @@ export function newBlock(type: BlockType): Block {
     case 'list':
       return { id, type, items: [''], style: 'check' };
     case 'dataList':
-      return { id, type, dataKey: 'insurances', style: 'letters' };
+      return { id, type, dataKey: defaultListKey, style: 'letters' };
     case 'powers':
       return {
         id,

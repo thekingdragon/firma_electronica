@@ -52,7 +52,7 @@ export interface SigningView {
   documentType: string;
   issuer: { legalName: string; registryCode: string | null; timezone: string };
   signer: { name: string; documentType: string; documentNumber: string };
-  data: { insurances?: string[] } & Record<string, unknown>;
+  data: Record<string, unknown>;
   blocks: ViewBlock[];
   clause: { version: number; text: string };
   policy: { photoRequired: boolean; photoChallengeRequired: boolean; idPhotoRequired: boolean; idPhotoBackRequired: boolean; reviewRequired: boolean };

@@ -9,13 +9,16 @@ export function LinkBox({
   url,
   signerName,
   phone,
+  documentName,
 }: {
   url: string;
   signerName: string;
   phone?: string;
+  /** Nombre del tipo de documento, para el mensaje de WhatsApp. */
+  documentName: string;
 }) {
   const [copied, setCopied] = useState<'ok' | 'error' | null>(null);
-  const wa = phone ? whatsappLink(phone, signerName, url) : null;
+  const wa = phone ? whatsappLink(phone, signerName, url, documentName) : null;
 
   async function copy() {
     try {

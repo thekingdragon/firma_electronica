@@ -14,10 +14,6 @@ export const REVIEW_LABEL: Record<ReviewResult, string> = {
   REJECTED: 'Identidad rechazada',
 };
 
-export const DOCUMENT_TYPE_LABEL: Record<string, string> = {
-  APPOINTMENT_LETTER: 'Carta de nombramiento',
-};
-
 /** Nombres entendibles de los eventos de la bitácora. */
 export const EVENT_LABEL: Record<string, string> = {
   link_opened: 'El firmante abrió el enlace',
@@ -59,10 +55,10 @@ export function isPast(iso: string): boolean {
 }
 
 /** Enlace de WhatsApp (wa.me) con el mensaje ya escrito; la persona solo pulsa «enviar». */
-export function whatsappLink(phone: string, signerName: string, url: string): string | null {
+export function whatsappLink(phone: string, signerName: string, url: string, documentName: string): string | null {
   const digits = phone.replace(/[\s()-]/g, '').replace(/^\+/, '');
   if (!/^[1-9]\d{7,14}$/.test(digits)) return null;
-  const text = `Hola ${signerName}, le enviamos su carta de nombramiento para que la firme: ${url}`;
+  const text = `Hola ${signerName}, le enviamos el documento «${documentName}» para que lo firme: ${url}`;
   return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
 }
 

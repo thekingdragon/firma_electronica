@@ -113,7 +113,7 @@ export class DbIsolationService implements OnApplicationBootstrap {
 }
 
 function runtimeUrl(): string {
-  const url = process.env.APP_DATABASE_URL ?? process.env.DATABASE_URL;
+  const url = process.env.APP_DATABASE_URL || process.env.DATABASE_URL;
   if (!url) throw new Error('Falta DATABASE_URL en el entorno.');
   return url;
 }

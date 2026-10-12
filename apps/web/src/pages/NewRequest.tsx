@@ -5,6 +5,7 @@ import { api, ApiRequestError, type CreateRequestBody } from '../api';
 import { useSession } from '../auth';
 import { LinkBox } from '../components/LinkBox';
 import { newUuid } from '../format';
+import { getDocumentTypeUi, listDocumentTypeUis, type Draft } from '../document-types';
 
 type Created = Awaited<ReturnType<typeof api.create>>;
 
@@ -21,7 +22,6 @@ interface Form {
   signerName: string;
   idType: string;
   idNumber: string;
-  insurances: string;
   email: string;
   phone: string;
   externalRef: string;
@@ -34,7 +34,6 @@ const EMPTY: Form = {
   signerName: '',
   idType: 'DNI',
   idNumber: '',
-  insurances: '',
   email: '',
   phone: '',
   externalRef: '',
@@ -47,13 +46,18 @@ function faltas(f: Form): Partial<Record<keyof Form, string>> {
   const out: Partial<Record<keyof Form, string>> = {};
   if (f.signerName.trim().length < 2) out.signerName = 'Ingrese el nombre completo del firmante.';
   if (!f.idNumber.trim()) out.idNumber = 'Ingrese el número de documento.';
-  if (!f.insurances.split('\n').some((l) => l.trim())) out.insurances = 'Ingrese al menos un seguro.';
   if (!EMAIL.test(f.email.trim())) out.email = 'Ingrese un correo válido: allí llegará el código de verificación.';
   return out;
 }
 
 export function NewRequest() {
+  const types = listDocumentTypeUis();
+  const [docType, setDocType] = useState(types[0].code);
+  const ui = getDocumentTypeUi(docType) ?? types[0];
   const [form, setForm] = useState<Form>(EMPTY);
+  // Los campos propios del tipo de documento (en la carta, los seguros) los define su cara en `document-types/`.
+  const [draft, setDraft] = useState<Draft>(() => types[0].emptyDraft());
+  const [draftErrors, setDraftErrors] = useState<Draft>({});
   const [shown, setShown] = useState<Partial<Record<keyof Form, string>>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -69,16 +73,18 @@ export function NewRequest() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     const missing = faltas(form);
+    const missingData = ui.validate(draft);
     setShown(missing);
-    if (Object.keys(missing).length) {
+    setDraftErrors(missingData);
+    if (Object.keys(missing).length || Object.keys(missingData).length) {
       setServerError(null);
       return;
     }
     const body: CreateRequestBody = {
-      documentType: 'APPOINTMENT_LETTER',
+      documentType: ui.code,
       externalRef: form.externalRef.trim() || `panel-${idempotencyKey.current.slice(0, 8)}`,
       signer: { name: form.signerName.trim(), documentType: form.idType, documentNumber: form.idNumber.trim() },
-      data: { insurances: form.insurances.split('\n').map((l) => l.trim()).filter(Boolean) },
+      data: ui.toData(draft),
       otp: { channel: 'EMAIL', to: form.email.trim() },
       delivery: form.sendByService ? { mode: 'SERVICE', channel: 'EMAIL', to: form.email.trim() } : { mode: 'HOST' },
       expiresInHours: form.expiresInHours,
@@ -102,6 +108,8 @@ export function NewRequest() {
   function another() {
     idempotencyKey.current = newUuid();
     setForm(EMPTY);
+    setDraft(ui.emptyDraft());
+    setDraftErrors({});
     setShown({});
     setServerError(null);
     setCreated(null);
@@ -132,7 +140,7 @@ export function NewRequest() {
           ) : (
             <>
               <h2>Envíe el enlace al firmante</h2>
-              {result.signUrl && <LinkBox url={result.signUrl} signerName={signerName} phone={phone} />}
+              {result.signUrl && <LinkBox url={result.signUrl} signerName={signerName} phone={phone} documentName={ui.name} />}
               <p className="hint">
                 El código de verificación (OTP) lo recibirá el firmante por correo al abrir el enlace. Por seguridad no
                 se envía por el mismo medio que el enlace.
@@ -158,7 +166,29 @@ export function NewRequest() {
     <>
       <h1>Nueva solicitud</h1>
       <form className="card form" onSubmit={submit} noValidate>
-        <h2>Carta de nombramiento</h2>
+        {types.length > 1 ? (
+          <>
+            <label htmlFor="docType">Tipo de documento *</label>
+            <select
+              id="docType"
+              value={docType}
+              onChange={(e) => {
+                const next = getDocumentTypeUi(e.target.value) ?? types[0];
+                setDocType(next.code);
+                setDraft(next.emptyDraft());
+                setDraftErrors({});
+              }}
+            >
+              {types.map((t) => (
+                <option key={t.code} value={t.code}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </>
+        ) : (
+          <h2>{ui.name}</h2>
+        )}
 
         <div className="grid">
           <div className="span-2">
@@ -181,17 +211,15 @@ export function NewRequest() {
           </div>
         </div>
 
-        <label htmlFor="insurances">Seguros que se nombran *</label>
-        <textarea
-          id="insurances"
-          rows={4}
-          value={form.insurances}
-          className={field('insurances')}
-          onChange={(e) => set('insurances', e.target.value)}
-          placeholder={'Un seguro por línea, por ejemplo:\nSCTR Salud\nSCTR Pensión'}
+        <ui.Fields
+          draft={draft}
+          errors={draftErrors}
+          invalid={(k) => (draftErrors[k] ? 'invalid' : '')}
+          onChange={(k, v) => {
+            setDraft((d) => ({ ...d, [k]: v }));
+            setDraftErrors((e) => ({ ...e, [k]: '' }));
+          }}
         />
-        <p className="hint">Son las líneas A, B, C… de la carta: el tipo de seguro, no el número de póliza.</p>
-        {shown.insurances && <p className="error">{shown.insurances}</p>}
 
         <div className="grid">
           <div>
@@ -233,7 +261,7 @@ export function NewRequest() {
           </div>
         </div>
 
-        {Object.values(shown).some(Boolean) && <p className="error" role="alert">Revise los campos marcados.</p>}
+        {(Object.values(shown).some(Boolean) || Object.values(draftErrors).some(Boolean)) && <p className="error" role="alert">Revise los campos marcados.</p>}
         {serverError && <p className="error" role="alert">{serverError}</p>}
 
         <div className="actions">

@@ -1,5 +1,5 @@
 import { fechaHoraEnZona, fechaLargaEnZona } from '../common/fechas';
-import { Block, VariableContext, dataStrings, fillVariables, resolveBlocks } from './blocks';
+import { Block, LegacyBlocksReader, VariableContext, dataStrings, fillVariables, resolveBlocks } from './blocks';
 import { plainText, stripMarks } from './inline';
 import { PdfFlow } from './pdf-flow';
 import type { DocumentRenderer, RenderInput } from './types';
@@ -38,8 +38,8 @@ export function variableContextOf(input: Pick<RenderInput, 'issuer' | 'signer' |
  * que cambia de uno a otro es la lista de bloques. La constancia de la firma va siempre al final y no es
  * editable (es lo que prueba la firma; no puede quitarla una plantilla).
  */
-export const renderBlocksDocument: DocumentRenderer = async (input: RenderInput) => {
-  const blocks = resolveBlocks(input.content, input.annexText);
+export const makeBlocksRenderer = (legacy?: LegacyBlocksReader): DocumentRenderer => async (input: RenderInput) => {
+  const blocks = resolveBlocks(input.content, input.annexText, legacy);
   const ctx = variableContextOf(input);
   const fill = (s: string) => fillVariables(s, ctx);
   const chosen = new Set(input.form.powers);
@@ -175,3 +175,6 @@ export const renderBlocksDocument: DocumentRenderer = async (input: RenderInput)
   // Sin flujos de objetos: el sello de integridad (PDF firmado) necesita la tabla de referencias clásica.
   return doc.save({ useObjectStreams: false });
 };
+
+/** El generador sin lectura de plantillas anteriores a los bloques (cada tipo de documento arma el suyo). */
+export const renderBlocksDocument: DocumentRenderer = makeBlocksRenderer();

@@ -6,6 +6,7 @@ import { ApiError } from '../common/api-error';
 import { sha256Hex } from '../common/crypto';
 import { APP_CONFIG, AppConfig } from '../config/config';
 import { PG_POOL } from '../db/db.module';
+import { getDocumentType } from '../document-types';
 import { BlocksError, ViewBlock, resolveBlocks, toViewBlocks } from '../documents/blocks';
 import { formatDate } from '../documents/render-blocks';
 import { MailNotConfiguredError, MailSendError, MailService } from '../mail/mail.service';
@@ -294,7 +295,7 @@ export class SignService {
   private viewBlocks(row: LinkRow): ViewBlock[] {
     try {
       return toViewBlocks(
-        resolveBlocks(row.body_json, row.annex_text),
+        resolveBlocks(row.body_json, row.annex_text, getDocumentType(row.document_type)?.legacyBlocks),
         {
           brokerLegalName: row.legal_name,
           brokerRegistryCode: row.registry_code,

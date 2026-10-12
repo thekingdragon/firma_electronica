@@ -7,7 +7,7 @@
  *   npm run template:publish -w api -- --tenant <uuid> --annex-file anexo.txt
  *   npm run template:publish -w api -- --tenant <uuid> --photo false --photo-challenge false
  *
- * Opciones: --type (por defecto APPOINTMENT_LETTER), --clause-file, --annex-file («-» o vacío lo
+ * Opciones: --type (si hay un solo tipo registrado, es el que se usa), --clause-file, --annex-file («-» o vacío lo
  * quita con --no-annex), --otp, --photo, --photo-challenge, --id-photo, --id-photo-back y --legal-reviewed (true|false).
  * Los textos se leen de archivos UTF-8 para no pasar por la codificación de la terminal.
  */
@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs';
 import { Pool } from 'pg';
 import * as dotenv from 'dotenv';
 import { loadConfig } from '../config/config';
+import { listDocumentTypes } from '../document-types';
 import { TemplateChanges, publishTemplate } from './templates.service';
 dotenv.config();
 
@@ -42,7 +43,7 @@ function text(name: string): string | undefined {
 async function main(): Promise<void> {
   const config = loadConfig();
   const tenantId = arg('tenant');
-  if (!tenantId) throw new Error('Uso: --tenant <uuid> [--type APPOINTMENT_LETTER] [--clause-file f] [--annex-file f | --no-annex] [--otp bool] [--photo bool] [--photo-challenge bool] [--id-photo bool] [--id-photo-back bool] [--legal-reviewed bool]');
+  if (!tenantId) throw new Error('Uso: --tenant <uuid> [--type <TIPO>] [--clause-file f] [--annex-file f | --no-annex] [--otp bool] [--photo bool] [--photo-challenge bool] [--id-photo bool] [--id-photo-back bool] [--legal-reviewed bool]');
 
   const changes: TemplateChanges = {
     clauseText: text('clause-file'),
@@ -58,7 +59,10 @@ async function main(): Promise<void> {
 
   const pool = new Pool({ connectionString: config.databaseUrl });
   try {
-    const type = arg('type') ?? 'APPOINTMENT_LETTER';
+    // Con un solo tipo de documento registrado no hace falta decirlo; con varios, --type es obligatorio.
+    const tipos = listDocumentTypes();
+    const type = arg('type') ?? (tipos.length === 1 ? tipos[0].code : undefined);
+    if (!type) throw new Error(`Falta --type. Tipos: ${tipos.map((t) => t.code).join(', ')}.`);
     const r = await publishTemplate(pool, tenantId, type, changes);
     console.log(`Plantilla ${type} publicada: versión ${r.version} (activa).`);
     if (r.previousVersion !== null) console.log(`La versión ${r.previousVersion} queda inactiva; las solicitudes ya creadas siguen con la suya.`);

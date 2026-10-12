@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { getDocumentTypeUi } from '../document-types';
 import { Link } from 'react-router-dom';
 import { api, type RequestStatus, type SignatureRequest } from '../api';
 import { useSession } from '../auth';
@@ -63,7 +64,7 @@ export function Requests() {
               <tr>
                 <th>Referencia</th>
                 <th>Firmante</th>
-                <th>Seguros</th>
+                <th>Detalle</th>
                 <th>Estado</th>
                 <th>Revisión</th>
                 <th>Creada</th>
@@ -77,7 +78,7 @@ export function Requests() {
                     <Link to={`/solicitudes/${r.id}`}>{r.reference}</Link>
                   </td>
                   <td>{r.signerName}</td>
-                  <td>{r.data.insurances?.length ?? '—'}</td>
+                  <td>{getDocumentTypeUi(r.documentType)?.summary(r.data) ?? '—'}</td>
                   <td>
                     <StatusBadge status={r.status} />
                   </td>

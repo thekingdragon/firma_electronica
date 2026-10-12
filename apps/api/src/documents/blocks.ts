@@ -10,7 +10,6 @@
  * validar al leerse (una fila vieja o tocada a mano no puede romper la firma).
  */
 import { z } from 'zod';
-import { DEFAULT_LETTER_TEXTS } from './appointment-letter-texts';
 import { hasUnbalancedMarks, stripMarks } from './inline';
 
 // ---------------------------------------------------------------------------------------------------------
@@ -271,59 +270,17 @@ export function parseBlocks(input: unknown): Block[] {
   return blocks;
 }
 
-// ---------------------------------------------------------------------------------------------------------
-// Plantillas anteriores a los bloques
-// ---------------------------------------------------------------------------------------------------------
-
-const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+/** Lee una plantilla guardada antes de existir los bloques; la define cada tipo de documento (ver document-types). */
+export type LegacyBlocksReader = (content: Record<string, unknown>, annexText: string | null) => Block[];
 
 /**
- * Una plantilla guardada antes de existir los bloques (textos sueltos + facultades + un anexo) se lee como
- * los bloques equivalentes: así no hay que migrar filas ni rehacer lo que ya estaba publicado.
+ * Los bloques de una plantilla: los propios si los tiene, y si no, los que salen de su forma anterior (si el tipo de
+ * documento sabe leerla). Una plantilla con bloques inválidos no se firma (mejor un error claro que un documento a medias).
  */
-export function blocksFromLegacy(content: Record<string, unknown>, annexText: string | null): Block[] {
-  const t = { ...DEFAULT_LETTER_TEXTS, ...((content.texts as Record<string, string> | undefined) ?? {}) };
-  const rawPowers = Array.isArray(content.powers) ? (content.powers as Array<Record<string, unknown>>) : [];
-  const maxLength = Number((content.observation as { maxLength?: number } | undefined)?.maxLength ?? 1000);
-
-  const blocks: Block[] = [
-    { id: 'encabezado', type: 'issuerHeader', showRegistry: true, showDate: true },
-    { id: 'titulo', type: 'title', text: t.title },
-    {
-      id: 'destinatario',
-      type: 'paragraph',
-      text: [t.salutation, t.addressee, '{{broker.legalName}}', t.presente].join('\n'),
-      align: 'left',
-      bold: false,
-      small: false,
-    },
-    { id: 'saludo', type: 'paragraph', text: t.greeting, align: 'left', bold: false, small: false },
-    { id: 'cuerpo', type: 'paragraph', text: t.body, align: 'left', bold: false, small: false },
-    { id: 'seguros', type: 'dataList', dataKey: 'insurances', style: 'letters' },
-    {
-      id: 'facultades',
-      type: 'powers',
-      intro: t.powersIntro,
-      items: rawPowers.map((p) => ({ code: str(p.code), text: str(p.text), defaultChecked: p.defaultChecked !== false })),
-      observation: { enabled: true, label: t.observationLabel, maxLength: Number.isFinite(maxLength) && maxLength > 0 ? maxLength : 1000 },
-    },
-    { id: 'cierre', type: 'paragraph', text: t.closing, align: 'left', bold: false, small: false },
-    { id: 'firmante', type: 'signerBox', title: t.signerBlock },
-    { id: 'sello', type: 'signatureStamp' },
-  ];
-  if (annexText) {
-    blocks.push({ id: 'anexo', type: 'annex', title: t.annexTitle, subtitle: '(Elaborado por el corredor de seguros)', text: annexText });
-  }
-  return blocks;
-}
-
-/**
- * Los bloques de una plantilla: los propios si los tiene, y si no, los que salen de su forma anterior.
- * Una plantilla con bloques inválidos no se firma (mejor un error claro que un documento a medias).
- */
-export function resolveBlocks(content: Record<string, unknown>, annexText: string | null): Block[] {
+export function resolveBlocks(content: Record<string, unknown>, annexText: string | null, legacy?: LegacyBlocksReader): Block[] {
   if (content.blocks !== undefined) return parseBlocks(content.blocks);
-  return blocksFromLegacy(content, annexText);
+  if (legacy) return legacy(content, annexText);
+  throw new BlocksError([{ path: '', message: 'La plantilla no tiene bloques.' }]);
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -349,6 +306,8 @@ export type ViewBlock =
   | { id: string; type: 'signatureStamp' }
   | { id: string; type: 'annex'; title: string; subtitle: string; text: string }
   | { id: string; type: 'pageBreak' };
+
+const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
 export function dataStrings(data: Record<string, unknown>, key: string): string[] {
   const v = data[key];

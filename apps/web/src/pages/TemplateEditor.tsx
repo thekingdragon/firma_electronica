@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiRequestError, api, type TemplateDetail, type TemplatePolicy } from '../api';
 import { useSession } from '../auth';
+import { getDocumentTypeUi } from '../document-types';
 import { cleanBlocks, localProblems, type Block } from '../blocks';
 import { BlockEditor } from '../components/BlockEditor';
 import { formatDateTime } from '../format';
@@ -192,7 +193,7 @@ export function TemplateEditor() {
 
       <div className="card">
         <h2>Contenido del documento</h2>
-        <BlockEditor blocks={draft.blocks} onChange={(blocks) => set({ blocks })} />
+        <BlockEditor blocks={draft.blocks} onChange={(blocks) => set({ blocks })} defaultListKey={getDocumentTypeUi(type)?.defaultListKey} />
       </div>
 
       <div className="card">

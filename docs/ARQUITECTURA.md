@@ -180,7 +180,21 @@ constancia), el correo del enlace, la página de «Documento firmado» y el pane
 firmó. La bitácora, el paquete de evidencia y los webhooks siguen en UTC (ISO 8601): son para máquinas. Las funciones están
 en `common/fechas.ts` (servidor) y `apps/web/src/fechas.ts` (navegador): son copias, si se cambia una hay que cambiar la otra.
 
-### 6.4 Usuarios, sesiones y segundo factor del panel
+### 6.4 El servicio de firmas y los tipos de documento
+
+Este programa es un **servicio de firmas genérico**; la carta de nombramiento es solo el primer tipo de documento que firma. Todo lo
+propio de un tipo vive en una carpeta y el núcleo no lo menciona:
+
+- **API:** `apps/api/src/document-types/<tipo>/` (sus datos, su plantilla de partida, sus textos, su lectura de plantillas
+antiguas) y su entrada en `document-types/index.ts`. El núcleo (solicitudes, firma, evidencia, sello, auth, operador) solo pregunta al
+registro (`getDocumentType`). **`document-types.spec.ts` falla si el núcleo menciona un tipo concreto.**
+- **Panel:** `apps/web/src/document-types/<tipo>/` (los campos de «Nueva solicitud», la columna «Detalle», el detalle y el repaso
+antes de firmar) y su entrada en `document-types/index.ts`.
+- **Motor común, no de la carta:** los bloques (`documents/blocks.ts`), el generador de PDF, el formulario del firmante y la
+constancia. El nombre de algunos bloques (`powers` = facultades) viene de la carta, pero son bloques que cualquier tipo puede usar.
+- **Agregar un tipo:** carpeta en los dos lados, una fila en `document_types` (migración) y su plantilla de partida; no se toca el núcleo.
+
+### 6.5 Usuarios, sesiones y segundo factor del panel
 
 Patrón tomado de `gestor_segurov3` (Polix), reescrito con `pg` plano: `users` (rol `OPERATOR`/`ADMIN`/`REVIEWER`, el
 operador sin `tenant_id`, forzado por `CHECK`), `refresh_tokens` con familia y revocación con motivo, `mfa_recovery_codes`
@@ -375,7 +389,7 @@ un SMTP real— más un recorrido manual completo en el navegador montado como e
   «anterior al sello de integridad».
 - **Respaldo:** `npm run backup` copia base y archivos con manifiesto, pero **no** `SECRETS_KEY` ni lo
   lleva fuera de la máquina; eso es responsabilidad de quien opera (DESPLIEGUE §8).
-- **El panel ya no entra con la clave de API** (§6.4): usuarios con rol, sesión corta con refresh en cookie HttpOnly y
+- **El panel ya no entra con la clave de API** (§6.5): usuarios con rol, sesión corta con refresh en cookie HttpOnly y
   segundo factor. La clave de API del tenant queda solo para la integración del host. Pendiente: bitácora de inicios de
   sesión en la base y confirmación de recepción del refresh.
 - **Los límites por IP son por proceso y en memoria** (se pierden al reiniciar; con varias instancias,

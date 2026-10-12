@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { consentsOf, powersBlockOf, resolveBlocks } from './blocks';
+import { LegacyBlocksReader, consentsOf, powersBlockOf, resolveBlocks } from './blocks';
 
 /**
  * Esquema de lo que el firmante completa (`form`), por tipo de documento, construido desde la
@@ -13,14 +13,17 @@ export interface FormValue {
   consents: string[];
 }
 
-export function formSchemaFor(documentType: string, content: Record<string, unknown>): z.ZodType<FormValue> | null {
-  if (documentType !== 'APPOINTMENT_LETTER') return null;
+/**
+ * El esquema del formulario a partir de los bloques de la plantilla (facultades, observación, consentimientos). Es el mismo
+ * motor para todos los tipos de documento; cada uno decide si lo usa (ver document-types).
+ */
+export function blockFormSchema(content: Record<string, unknown>, legacy?: LegacyBlocksReader): z.ZodType<FormValue> | null {
 
   // El formulario sale del bloque de facultades de la plantilla (si no tiene, no hay nada que completar).
   let block;
   let consents;
   try {
-    const blocks = resolveBlocks(content, null);
+    const blocks = resolveBlocks(content, null, legacy);
     block = powersBlockOf(blocks);
     consents = consentsOf(blocks);
   } catch {

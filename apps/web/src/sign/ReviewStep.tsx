@@ -1,4 +1,5 @@
 import { powersOf, type SigningView } from './signApi';
+import { getDocumentTypeUi } from '../document-types';
 import type { SignForm } from './DocumentStep';
 import type { TakenPhoto } from './PhotoStep';
 
@@ -44,9 +45,7 @@ export function ReviewStep({
           <strong>Observación:</strong> {form.observation}
         </p>
       )}
-      <p>
-        <strong>Seguros:</strong> {(view.data.insurances ?? []).join(' · ')}
-      </p>
+      {getDocumentTypeUi(view.documentType)?.reviewSummary(view.data)}
 
       {idPhoto && (
         <div className="review-photo">

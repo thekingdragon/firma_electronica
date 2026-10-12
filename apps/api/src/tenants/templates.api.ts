@@ -3,6 +3,7 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 import { ApiError } from '../common/api-error';
 import { PG_POOL } from '../db/db.module';
+import { getDocumentType } from '../document-types';
 import { Block, BlocksError, VARIABLES, resolveBlocks } from '../documents/blocks';
 import { renderBlocksDocument } from '../documents/render-blocks';
 import { PublishedTemplate, publishTemplate } from './templates.service';
@@ -99,7 +100,7 @@ export class TemplatesApiService {
   /** Una fila vieja o tocada a mano con bloques inválidos no tumba el panel: se informa con claridad. */
   private blocksOf(row: Row): Block[] {
     try {
-      return resolveBlocks(row.body_json, row.annex_text);
+      return resolveBlocks(row.body_json, row.annex_text, getDocumentType(row.document_type)?.legacyBlocks);
     } catch (e) {
       if (e instanceof BlocksError) {
         throw new ApiError(500, 'TEMPLATE_INVALID', `La plantilla guardada no es válida: ${e.message}`);

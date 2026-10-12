@@ -20,7 +20,7 @@ import {
   createRequestSchema,
   isValidContact,
 } from './create-request.dto';
-import { DOCUMENT_TYPE_DATA_SCHEMAS } from './document-types';
+import { getDocumentType } from '../document-types';
 import type { RequestStatus } from './request-status';
 
 export interface SignatureRequestView {
@@ -137,7 +137,7 @@ export class RequestsService {
     }
 
     // 1. Datos del tipo de documento.
-    const dataSchema = DOCUMENT_TYPE_DATA_SCHEMAS[input.documentType];
+    const dataSchema = getDocumentType(input.documentType)?.dataSchema;
     if (!dataSchema) {
       throw new ApiError(
         422,

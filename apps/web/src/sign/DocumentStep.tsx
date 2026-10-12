@@ -87,7 +87,7 @@ export function DocumentStep({
       case 'list':
         if (b.style === 'letters') {
           return (
-            <ol key={b.id} className="insurances" type="A">
+            <ol key={b.id} className="data-list" type="A">
               {b.items.map((s, i) => (
                 <li key={i}><Rich text={s} /></li>
               ))}

@@ -1,5 +1,7 @@
 import { defaultTemplates } from '../tenants/default-templates';
-import { formSchemaFor } from './form-schemas';
+import { getDocumentType } from '../document-types';
+
+const formSchemaFor = (code: string, content: Record<string, unknown>) => getDocumentType(code)?.formSchema(content) ?? null;
 
 const content = defaultTemplates()[0].bodyJson;
 const schema = formSchemaFor('APPOINTMENT_LETTER', content)!;

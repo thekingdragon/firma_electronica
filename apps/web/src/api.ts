@@ -49,7 +49,8 @@ export interface SignatureRequest {
   signedAt: string | null;
   externalRef: string;
   signerName: string;
-  data: { insurances?: string[] } & Record<string, unknown>;
+  /** Datos propios del tipo de documento (los muestra su cara en `document-types/`). */
+  data: Record<string, unknown>;
   createdAt: string;
   review: ReviewResult | null;
   deliveryMode: 'HOST' | 'SERVICE';
@@ -61,7 +62,7 @@ export interface CreateRequestBody {
   documentType: string;
   externalRef: string;
   signer: { name: string; documentType: string; documentNumber: string };
-  data: { insurances: string[] };
+  data: Record<string, unknown>;
   otp: { channel: 'EMAIL'; to: string };
   delivery: CreateDelivery;
   expiresInHours: number;

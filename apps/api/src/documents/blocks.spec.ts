@@ -3,7 +3,6 @@ import {
   BlocksError,
   Block,
   VariableContext,
-  blocksFromLegacy,
   fillVariables,
   parseBlocks,
   powersBlockOf,
@@ -11,7 +10,11 @@ import {
   toViewBlocks,
   unknownVariables,
 } from './blocks';
-import { formSchemaFor } from './form-schemas';
+import { getDocumentType } from '../document-types';
+import { blocksFromLegacy } from '../document-types/appointment-letter/legacy';
+
+/** El esquema del formulario del tipo de documento, como lo arma el núcleo al firmar. */
+const formSchemaFor = (code: string, content: Record<string, unknown>) => getDocumentType(code)?.formSchema(content) ?? null;
 import { renderBlocksDocument } from './render-blocks';
 import type { RenderInput } from './types';
 
@@ -163,7 +166,7 @@ describe('plantillas anteriores a los bloques', () => {
 
   it('resolveBlocks usa los bloques propios si existen y, si no, los anteriores', () => {
     expect(resolveBlocks({ blocks: base }, 'ignorado').some((b) => b.type === 'annex')).toBe(false);
-    expect(resolveBlocks(legacy, 'texto').some((b) => b.type === 'annex')).toBe(true);
+    expect(resolveBlocks(legacy, 'texto', blocksFromLegacy).some((b) => b.type === 'annex')).toBe(true);
   });
 
   it('unos bloques guardados que no son válidos NO se tratan como «no hay»: es un error', () => {

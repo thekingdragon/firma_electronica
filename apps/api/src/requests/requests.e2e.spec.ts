@@ -7,13 +7,11 @@
  * base de trabajo por error borraría datos.
  */
 import { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
-import { join } from 'node:path';
 import { Pool } from 'pg';
 import request from 'supertest';
 import { sha256Hex } from '../common/crypto';
-import { applyMigrations } from '../db/migrations';
 import { createTenant } from '../tenants/tenants.service';
+import { makeApp, resetDatabase } from '../test-utils';
 
 const TEST_URL = process.env.TEST_DATABASE_URL;
 if (!TEST_URL) {
@@ -44,28 +42,15 @@ describe('POST /v1/requests', () => {
   let tenantB: string;
 
   beforeAll(async () => {
-    process.env.DATABASE_URL = TEST_URL;
-    process.env.TOKEN_SECRET = TOKEN_SECRET;
-    process.env.PUBLIC_BASE_URL = BASE_URL;
-    process.env.NODE_ENV = 'test';
-    process.env.BACKGROUND_JOBS = 'false';
-    process.env.PUBLIC_RATE_LIMIT_PER_MIN = '100000';
-
-    await applyMigrations(TEST_URL!, join(__dirname, '..', '..', 'migrations'));
-    pool = new Pool({ connectionString: TEST_URL });
-    await pool.query('TRUNCATE tenants CASCADE');
-
+    // Misma preparación que las demás pruebas: la API corre con el rol de runtime sujeto a RLS, como en producción.
+    pool = await resetDatabase(TEST_URL!);
     const a = await createTenant(pool, { name: 'A', country: 'PE', legalName: 'Corredora A SAC' });
     const b = await createTenant(pool, { name: 'B', country: 'PE', legalName: 'Corredora B SAC' });
     keyA = a.apiKey;
     keyB = b.apiKey;
     tenantA = a.tenant.id;
     tenantB = b.tenant.id;
-
-    const { AppModule } = await import('../app.module');
-    const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = mod.createNestApplication();
-    await app.init();
+    app = await makeApp({ DATABASE_URL: TEST_URL!, TOKEN_SECRET, PUBLIC_BASE_URL: BASE_URL, NODE_ENV: 'test' });
   });
 
   afterAll(async () => {
@@ -311,7 +296,7 @@ describe('POST /v1/requests', () => {
     it('GET /v1/me devuelve el tenant dueño de la clave y exige clave', async () => {
       const ok = await get(keyA, '/v1/me');
       expect(ok.status).toBe(200);
-      expect(ok.body).toEqual({ name: 'A', country: 'PE', legalName: 'Corredora A SAC' });
+      expect(ok.body).toEqual({ name: 'A', country: 'PE', legalName: 'Corredora A SAC', timezone: 'America/Lima' });
       expect((await get(undefined, '/v1/me')).status).toBe(401);
     });
 

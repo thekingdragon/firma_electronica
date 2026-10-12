@@ -3,7 +3,7 @@ import { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { ApiError } from '../common/api-error';
 import { PG_POOL } from '../db/db.module';
-import { formSchemaFor } from '../documents/form-schemas';
+import { getDocumentType } from '../document-types';
 import { imageInfo } from '../documents/image-info';
 import { renderDocument, resolveContent } from '../documents/render';
 import { enqueueWebhook } from '../webhooks/outbox';
@@ -126,7 +126,7 @@ export class SubmitService implements OnApplicationShutdown {
       throw new ApiError(422, 'ACCEPTANCE_REQUIRED', 'Debe aceptar la cláusula para firmar.');
     }
 
-    const formSchema = formSchemaFor(link.document_type, link.body_json);
+    const formSchema = getDocumentType(link.document_type)?.formSchema(link.body_json) ?? null;
     if (!formSchema) {
       throw new ApiError(422, 'DOCUMENT_TYPE_UNSUPPORTED', 'Este tipo de documento no se puede firmar todavía.');
     }
