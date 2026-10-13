@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dev:lan": "vite --host 0.0.0.0"
   },
   "dependencies": {
     "react": "^19.2.6",
