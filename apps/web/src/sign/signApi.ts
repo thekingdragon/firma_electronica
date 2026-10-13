@@ -54,6 +54,8 @@ export interface SigningView {
   signer: { name: string; documentType: string; documentNumber: string };
   data: Record<string, unknown>;
   blocks: ViewBlock[];
+  /** Pie de página del documento con las variables ya completas, o `null`. */
+  footer: string | null;
   clause: { version: number; text: string };
   policy: { photoRequired: boolean; photoChallengeRequired: boolean; idPhotoRequired: boolean; idPhotoBackRequired: boolean; reviewRequired: boolean };
   expiresAt: string;

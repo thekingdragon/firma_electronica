@@ -180,7 +180,20 @@ constancia), el correo del enlace, la página de «Documento firmado» y el pane
 firmó. La bitácora, el paquete de evidencia y los webhooks siguen en UTC (ISO 8601): son para máquinas. Las funciones están
 en `common/fechas.ts` (servidor) y `apps/web/src/fechas.ts` (navegador): son copias, si se cambia una hay que cambiar la otra.
 
-### 6.4 El servicio de firmas y los tipos de documento
+### 6.4 Pie de página y «atendido por»
+
+Cada plantilla puede tener un **pie de página** (`body_json.footer`, texto con variables y negrita, hasta 400 caracteres): se repite al pie de
+**cada hoja** del PDF y se muestra al final del documento en pantalla. El generador reserva su espacio antes de maquetar, así que el
+contenido nunca queda debajo. Se edita desde el panel (Plantillas) y las variables son las mismas del documento, más
+`{{attendedBy}}`.
+
+**Atendido por** es la persona que **creó la solicitud y envió el enlace**, y es otra cosa que quien revisa la identidad (esa queda en la
+revisión). Se guarda como texto al crear (`signature_requests.attended_by`, migración 0015): con sesión del panel es SIEMPRE el nombre de quien la
+tiene (no se acepta del cuerpo, para que no se falsee); con clave de API lo informa la integración (`attendedBy`) o queda sin dato (se muestra
+«—»). Al ser un texto y no una referencia al usuario, si esa persona cambia de nombre o se da de baja, el documento ya firmado sigue diciendo
+quién atendió ese día. La carta de nombramiento de partida lleva en su pie los datos del firmante, la fecha y «Atendido por».
+
+### 6.5 El servicio de firmas y los tipos de documento
 
 Este programa es un **servicio de firmas genérico**; la carta de nombramiento es solo el primer tipo de documento que firma. Todo lo
 propio de un tipo vive en una carpeta y el núcleo no lo menciona:
@@ -194,7 +207,7 @@ antes de firmar) y su entrada en `document-types/index.ts`.
 constancia. El nombre de algunos bloques (`powers` = facultades) viene de la carta, pero son bloques que cualquier tipo puede usar.
 - **Agregar un tipo:** carpeta en los dos lados, una fila en `document_types` (migración) y su plantilla de partida; no se toca el núcleo.
 
-### 6.5 Usuarios, sesiones y segundo factor del panel
+### 6.6 Usuarios, sesiones y segundo factor del panel
 
 Patrón tomado de `gestor_segurov3` (Polix), reescrito con `pg` plano: `users` (rol `OPERATOR`/`ADMIN`/`REVIEWER`, el
 operador sin `tenant_id`, forzado por `CHECK`), `refresh_tokens` con familia y revocación con motivo, `mfa_recovery_codes`
@@ -395,9 +408,9 @@ un SMTP real— más un recorrido manual completo en el navegador montado como e
   «anterior al sello de integridad».
 - **Respaldo:** `npm run backup` copia base y archivos con manifiesto, pero **no** `SECRETS_KEY` ni lo
   lleva fuera de la máquina; eso es responsabilidad de quien opera (DESPLIEGUE §8).
-- **El panel ya no entra con la clave de API** (§6.5): usuarios con rol, sesión corta con refresh en cookie HttpOnly y
+- **El panel ya no entra con la clave de API** (§6.6): usuarios con rol, sesión corta con refresh en cookie HttpOnly y
   segundo factor. La clave de API del tenant queda solo para la integración del host. Pendiente: confirmación de
-  recepción del refresh (la bitácora de accesos ya existe, §6.5).
+  recepción del refresh (la bitácora de accesos ya existe, §6.6).
 - **Los límites por IP son por proceso y en memoria** (se pierden al reiniciar; con varias instancias,
   cada una cuenta lo suyo). Dependen de `TRUST_PROXY`: mal puesto, todos los firmantes comparten un cupo.
 - **Los webhooks fallidos no tienen pantalla**: tras ~23 h y 9 intentos se marcan `failed_at` en

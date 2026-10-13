@@ -42,6 +42,8 @@ export interface SignatureRequestView {
 export interface SignatureRequestSummary extends SignatureRequestView {
   externalRef: string;
   signerName: string;
+  /** Quién atendió al cliente: la persona que creó la solicitud y envió el enlace (no quien revisa). */
+  attendedBy: string | null;
   /** Datos propios del tipo de documento (en la carta: los seguros nombrados). */
   data: Record<string, unknown>;
   createdAt: string;
@@ -53,6 +55,7 @@ export interface SignatureRequestSummary extends SignatureRequestView {
 
 interface SummaryRow extends RequestRow {
   review_result: 'VERIFIED' | 'REJECTED' | null;
+  attended_by: string | null;
   external_ref: string;
   snapshot: { signer: { name: string }; data: Record<string, unknown> };
   created_at: Date;
@@ -128,6 +131,8 @@ export class RequestsService {
     tenant: Tenant,
     input: CreateRequestInput,
     idempotencyKey: string | undefined,
+    /** Quién atendió al cliente (el nombre de quien tiene la sesión). Sin sesión, lo que informe la integración, si lo informa. */
+    attendedBy: string | null = input.attendedBy ?? null,
   ): Promise<{ view: SignatureRequestView; replay: boolean }> {
     if (idempotencyKey !== undefined && !/^[\x21-\x7E]{1,255}$/.test(idempotencyKey)) {
       throw new ApiError(
@@ -212,8 +217,8 @@ export class RequestsService {
             `INSERT INTO signature_requests
                (id, tenant_id, document_type, template_id, reference, external_ref, idempotency_key,
                 snapshot, snapshot_sha256, otp_channel, otp_to, delivery_mode, delivery_channel,
-                delivery_to, token_hash, webhook_url, expires_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+                delivery_to, token_hash, webhook_url, attended_by, expires_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $18,
                      now() + make_interval(hours => $17))
              RETURNING id, document_type, reference, status, snapshot_sha256, delivery_mode,
                        expires_at, signed_at`,
@@ -235,6 +240,7 @@ export class RequestsService {
               sha256Hex(token),
               input.webhookUrl ?? null,
               input.expiresInHours,
+              attendedBy,
             ],
           );
           await client.query('RELEASE SAVEPOINT insertar');
@@ -302,7 +308,7 @@ export class RequestsService {
   ): Promise<SignatureRequestSummary[]> {
     const { rows } = await this.pool.query<SummaryRow>(
       `SELECT r.id, r.document_type, r.reference, r.status, r.snapshot_sha256, r.delivery_mode, r.expires_at,
-              r.signed_at, r.external_ref, r.snapshot, r.created_at, e.review_result
+              r.signed_at, r.external_ref, r.snapshot, r.created_at, r.attended_by, e.review_result
          FROM signature_requests r
          LEFT JOIN signature_evidence e ON e.request_id = r.id
         WHERE r.tenant_id = $1 AND ($2::request_status IS NULL OR r.status = $2::request_status)
@@ -320,7 +326,7 @@ export class RequestsService {
     }
     const { rows } = await this.pool.query<SummaryRow>(
       `SELECT r.id, r.document_type, r.reference, r.status, r.snapshot_sha256, r.delivery_mode, r.expires_at,
-              r.signed_at, r.external_ref, r.snapshot, r.created_at, e.review_result
+              r.signed_at, r.external_ref, r.snapshot, r.created_at, r.attended_by, e.review_result
          FROM signature_requests r
          LEFT JOIN signature_evidence e ON e.request_id = r.id
         WHERE r.tenant_id = $1 AND r.id = $2`,
@@ -380,6 +386,7 @@ export class RequestsService {
       signerName: r.snapshot.signer.name,
       data: r.snapshot.data,
       createdAt: r.created_at.toISOString(),
+      attendedBy: r.attended_by,
       review: r.review_result,
       deliveryMode: r.delivery_mode,
     };

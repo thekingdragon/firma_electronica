@@ -64,6 +64,7 @@ export function Requests() {
               <tr>
                 <th>Referencia</th>
                 <th>Firmante</th>
+                <th>Atendió</th>
                 <th>Detalle</th>
                 <th>Estado</th>
                 <th>Revisión</th>
@@ -78,6 +79,7 @@ export function Requests() {
                     <Link to={`/solicitudes/${r.id}`}>{r.reference}</Link>
                   </td>
                   <td>{r.signerName}</td>
+                  <td>{r.attendedBy ?? '—'}</td>
                   <td>{getDocumentTypeUi(r.documentType)?.summary(r.data) ?? '—'}</td>
                   <td>
                     <StatusBadge status={r.status} />

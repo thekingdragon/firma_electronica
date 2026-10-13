@@ -16,6 +16,11 @@ export const createRequestSchema = z
   .object({
     documentType: z.string().regex(/^[A-Z][A-Z0-9_]*$/, 'Código de tipo de documento inválido'),
     externalRef: z.string().trim().min(1).max(200),
+    /**
+     * Quién atendió al cliente. Con sesión del panel se IGNORA y se usa el nombre de quien la tiene; solo lo usa una integración
+     * (clave de API) para informar qué persona de su sistema envió el enlace.
+     */
+    attendedBy: z.string().trim().min(1).max(160).optional(),
     signer: z
       .object({
         name: z.string().trim().min(2).max(200),

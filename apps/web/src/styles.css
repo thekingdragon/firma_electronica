@@ -1013,3 +1013,5 @@ div.photo-box {
 
 .mail-test { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 .ok { color: #166534; }
+
+.doc-footer { margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border); text-align: center; }

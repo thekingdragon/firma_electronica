@@ -52,6 +52,8 @@ export interface SignatureRequest {
   /** Datos propios del tipo de documento (los muestra su cara en `document-types/`). */
   data: Record<string, unknown>;
   createdAt: string;
+  /** Quién atendió: la persona que creó la solicitud y envió el enlace (no quien revisa). */
+  attendedBy: string | null;
   review: ReviewResult | null;
   deliveryMode: 'HOST' | 'SERVICE';
 }
@@ -169,6 +171,8 @@ export interface TemplateDetail extends TemplateVersionSummary {
   name: string;
   legacy: boolean;
   blocks: Block[];
+  /** Pie de página de cada hoja (texto con variables y negrita); vacío si no tiene. */
+  footer: string;
   clauseText: string;
   policy: TemplatePolicy;
   variables: Array<{ name: string; label: string }>;
@@ -177,6 +181,8 @@ export interface TemplateDetail extends TemplateVersionSummary {
 
 export interface PublishTemplateBody {
   blocks: Block[];
+  /** Sin este campo se conserva el anterior; con '' se quita. */
+  footer?: string;
   clauseText: string;
   policy: TemplatePolicy;
   legalReviewed: boolean;
@@ -227,7 +233,7 @@ export const api = {
     call<TemplateDetail>('GET', version ? `/v1/templates/${type}/versions/${version}` : `/v1/templates/${type}`).then((r) => r.data),
   publishTemplate: (type: string, body: PublishTemplateBody) =>
     call<{ id: string; version: number; previousVersion: number | null }>('POST', `/v1/templates/${type}`, body).then((r) => r.data),
-  previewTemplate: (type: string, body: { blocks: Block[]; clauseText: string }) => postForBlob(`/v1/templates/${type}/preview`, body),
+  previewTemplate: (type: string, body: { blocks: Block[]; footer?: string; clauseText: string }) => postForBlob(`/v1/templates/${type}/preview`, body),
 };
 
 // ---------------------------------------------------------------------------------------------------------------------

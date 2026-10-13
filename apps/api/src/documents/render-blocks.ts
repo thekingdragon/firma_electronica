@@ -1,5 +1,5 @@
 import { fechaHoraEnZona, fechaLargaEnZona } from '../common/fechas';
-import { Block, LegacyBlocksReader, VariableContext, dataStrings, fillVariables, resolveBlocks } from './blocks';
+import { Block, LegacyBlocksReader, VariableContext, dataStrings, fillVariables, footerOf, resolveBlocks } from './blocks';
 import { plainText, stripMarks } from './inline';
 import { PdfFlow } from './pdf-flow';
 import type { DocumentRenderer, RenderInput } from './types';
@@ -21,7 +21,7 @@ function formatDateTimeZone(d: Date, zone: string): string {
 }
 
 /** Las variables de un documento concreto. La fecha es la de la firma. */
-export function variableContextOf(input: Pick<RenderInput, 'issuer' | 'signer' | 'reference' | 'signedAt'>): VariableContext {
+export function variableContextOf(input: Pick<RenderInput, 'issuer' | 'signer' | 'reference' | 'signedAt' | 'attendedBy'>): VariableContext {
   return {
     brokerLegalName: input.issuer.legalName,
     brokerRegistryCode: input.issuer.registryCode,
@@ -30,6 +30,7 @@ export function variableContextOf(input: Pick<RenderInput, 'issuer' | 'signer' |
     signerDocumentNumber: input.signer.documentNumber,
     reference: input.reference,
     date: formatDate(input.signedAt, input.issuer.timezone),
+    attendedBy: input.attendedBy,
   };
 }
 
@@ -46,6 +47,9 @@ export const makeBlocksRenderer = (legacy?: LegacyBlocksReader): DocumentRendere
   const consented = new Set(input.form.consents ?? []);
 
   const f = await PdfFlow.create();
+  // El pie de página de la plantilla (nombre, documento, fecha, quién atendió…): se declara antes para reservarle su espacio.
+  const footer = footerOf(input.content);
+  if (footer) f.setFooter(fill(footer));
   const { doc } = f;
   const firstTitle = blocks.find((b) => b.type === 'title');
   doc.setTitle(`${firstTitle && firstTitle.type === 'title' ? plainText(fill(firstTitle.text)) : 'Documento'} ${input.reference}`);

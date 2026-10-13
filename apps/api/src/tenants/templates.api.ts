@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { ApiError } from '../common/api-error';
 import { PG_POOL } from '../db/db.module';
 import { getDocumentType } from '../document-types';
-import { Block, BlocksError, VARIABLES, resolveBlocks } from '../documents/blocks';
+import { Block, BlocksError, VARIABLES, resolveBlocks, MAX_FOOTER, footerOf, footerProblems } from '../documents/blocks';
 import { renderBlocksDocument } from '../documents/render-blocks';
 import { PublishedTemplate, publishTemplate } from './templates.service';
 import type { Tenant } from './tenants.service';
@@ -32,6 +32,8 @@ export interface TemplateDetail extends TemplateVersionSummary {
   /** `true` si la versión se guardó antes de existir los bloques: los de abajo son los equivalentes. */
   legacy: boolean;
   blocks: Block[];
+  /** Pie de página de cada hoja (texto con variables y negrita); vacío si no tiene. */
+  footer: string;
   clauseText: string;
   policy: TemplatePolicy;
   variables: ReadonlyArray<{ name: string; label: string }>;
@@ -50,6 +52,8 @@ export interface TemplateListItem {
 const publishSchema = z
   .object({
     blocks: z.array(z.unknown()),
+    // Sin este campo se conserva el pie de página anterior; con '' se quita.
+    footer: z.string().max(MAX_FOOTER, `El pie de página no puede pasar de ${MAX_FOOTER} caracteres.`).nullable().optional(),
     clauseText: z.string().trim().min(1, 'La cláusula de aceptación no puede estar vacía.').max(5000),
     policy: z
       .object({
@@ -66,7 +70,7 @@ const publishSchema = z
   })
   .strict();
 
-const previewSchema = z.object({ blocks: z.array(z.unknown()), clauseText: z.string().max(5000).default('') }).strict();
+const previewSchema = z.object({ blocks: z.array(z.unknown()), footer: z.string().max(MAX_FOOTER).nullable().optional(), clauseText: z.string().max(5000).default('') }).strict();
 
 const TYPE_RE = /^[A-Z][A-Z0-9_]*$/;
 
@@ -157,6 +161,7 @@ export class TemplatesApiService {
       legalReviewed: row.body_json.legalReviewed === true,
       legacy: row.body_json.blocks === undefined,
       blocks: this.blocksOf(row),
+      footer: footerOf(row.body_json),
       clauseText: row.clause_text,
       policy: {
         otpRequired: row.otp_required,
@@ -196,9 +201,14 @@ export class TemplatesApiService {
     if (p.policy.idPhotoBackRequired && !p.policy.idPhotoRequired) {
       throw new ApiError(422, 'VALIDATION_ERROR', 'El reverso del documento exige que la foto del documento sea obligatoria.');
     }
+    const footerIssues = footerProblems((p.footer ?? '').trim());
+    if (footerIssues.length) {
+      throw new ApiError(422, 'VALIDATION_ERROR', 'Hay problemas en el pie de página.', { issues: footerIssues.map((message) => ({ path: 'footer', message })) });
+    }
     try {
       return await publishTemplate(this.pool, tenant.id, documentType, {
         blocks: p.blocks,
+        footer: p.footer,
         clauseText: p.clauseText,
         otpRequired: p.policy.otpRequired,
         photoRequired: p.policy.photoRequired,
@@ -238,6 +248,10 @@ export class TemplatesApiService {
       }
       throw e;
     }
+    const footerIssues = footerProblems((parsed.data.footer ?? '').trim());
+    if (footerIssues.length) {
+      throw new ApiError(422, 'VALIDATION_ERROR', 'Hay problemas en el pie de página.', { issues: footerIssues.map((message) => ({ path: 'footer', message })) });
+    }
     // Datos de muestra: cada lista de datos lleva dos ejemplos; todas las facultades marcadas.
     const data: Record<string, unknown> = {};
     for (const b of blocks) if (b.type === 'dataList') data[b.dataKey] = [`${b.dataKey} de ejemplo 1`, `${b.dataKey} de ejemplo 2`];
@@ -245,10 +259,11 @@ export class TemplatesApiService {
     const now = new Date();
     const pdf = await renderBlocksDocument({
       reference: 'VISTA-PREVIA',
+      attendedBy: 'NOMBRE DE QUIEN ENVÍA EL ENLACE (EJEMPLO)',
       issuer: { legalName: tenant.legalName, registryCode: tenant.registryCode, timezone: tenant.timezone },
       signer: { name: 'NOMBRE APELLIDO (EJEMPLO)', documentType: 'DNI', documentNumber: '00000000' },
       data,
-      content: { blocks: parsed.data.blocks },
+      content: { blocks: parsed.data.blocks, ...((parsed.data.footer ?? '').trim() ? { footer: (parsed.data.footer ?? '').trim() } : {}) },
       annexText: null,
       clauseText: parsed.data.clauseText || 'Texto de la cláusula de aceptación (ejemplo).',
       form: { powers, observation: 'Observación de ejemplo.' },

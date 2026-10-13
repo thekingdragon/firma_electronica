@@ -9,6 +9,7 @@ import { formatDateTime } from '../format';
 
 interface Draft {
   blocks: Block[];
+  footer: string;
   clauseText: string;
   policy: TemplatePolicy;
   legalReviewed: boolean;
@@ -16,6 +17,7 @@ interface Draft {
 
 const draftOf = (d: TemplateDetail): Draft => ({
   blocks: structuredClone(d.blocks),
+  footer: d.footer ?? '',
   clauseText: d.clauseText,
   policy: { ...d.policy },
   legalReviewed: d.legalReviewed,
@@ -98,7 +100,7 @@ export function TemplateEditor() {
   };
 
   const local = localProblems(draft.blocks);
-  const body = () => ({ blocks: cleanBlocks(draft.blocks), clauseText: draft.clauseText });
+  const body = () => ({ blocks: cleanBlocks(draft.blocks), footer: draft.footer.trim(), clauseText: draft.clauseText });
 
   async function preview() {
     if (!draft) return;
@@ -194,6 +196,24 @@ export function TemplateEditor() {
       <div className="card">
         <h2>Contenido del documento</h2>
         <BlockEditor blocks={draft.blocks} onChange={(blocks) => set({ blocks })} defaultListKey={getDocumentTypeUi(type)?.defaultListKey} />
+      </div>
+
+      <div className="card">
+        <h2>Pie de página</h2>
+        <p className="hint">
+          Se repite al pie de <strong>cada hoja</strong> del PDF y se muestra al final del documento en pantalla. Sirve para dejar los datos de quien
+          firma, la fecha y <strong>quién atendió</strong> (la persona de la corredora que envió el enlace; no quien revisa la identidad). Admite las
+          variables de arriba y negrita con <code>**</code>. Déjelo vacío para no poner pie de página.
+        </p>
+        <textarea
+          rows={3}
+          maxLength={400}
+          value={draft.footer}
+          onChange={(e) => set({ footer: e.target.value })}
+          aria-label="Pie de página"
+          placeholder={'Nombres y apellidos: **{{signer.name}}**  ·  {{signer.documentType}}: **{{signer.documentNumber}}**  ·  {{date}}  ·  Atendido por: **{{attendedBy}}**'}
+        />
+        <p className="hint">{draft.footer.length}/400</p>
       </div>
 
       <div className="card">

@@ -73,6 +73,9 @@ const CONSENTIMIENTO_BENCHMARKING =
 
 const par = (id: string, text: string): Block => ({ id, type: 'paragraph', text, align: 'left', bold: false, small: false });
 
+/** Pie de cada hoja: quién firma, su documento, la fecha y la persona de la corredora que lo atendió (quien envió el enlace). */
+export const PIE_DE_PAGINA = 'Nombres y apellidos: **{{signer.name}}**  ·  {{signer.documentType}}: **{{signer.documentNumber}}**  ·  {{date}}  ·  Atendido por: **{{attendedBy}}**';
+
 function carta(): Block[] {
   const base = blocksFromLegacy(
     {
@@ -82,11 +85,8 @@ function carta(): Block[] {
     ANEXO_A_CARTA,
   );
   // Se arma en el orden de la carta: lo propio de cada bloque va justo después del que le corresponde.
-  // La carta la escribe el cliente (primera persona): abre con SUS datos y la fecha, no con un membrete de la corredora.
-  const out: Block[] = [
-    par('cliente', 'Nombres y apellidos: **{{signer.name}}**\n{{signer.documentType}}: **{{signer.documentNumber}}**'),
-    par('fecha', '{{date}}'),
-  ];
+  // La carta la escribe el cliente (primera persona), sin membrete de la corredora. Sus datos, la fecha y quién lo atendió van en el pie de página.
+  const out: Block[] = [];
   for (let b of base) {
     if (b.type === 'issuerHeader') continue;
     // «Señores: / CORREDORES DE SEGUROS / <razón social> / Presente.-» repetía el giro: la razón social ya lo incluye.
@@ -127,6 +127,8 @@ export function appointmentLetterSeed(): TemplateSeed {
       legalReviewed: false,
       // La carta es una lista de bloques que la corredora edita desde el panel (otro país, otro modelo).
       blocks: carta(),
+      // Los datos de quien firma, la fecha y quién lo atendió van al pie de cada hoja (no arriba): editable desde el panel.
+      footer: PIE_DE_PAGINA,
     },
     annexText: null,
     // BORRADOR: texto sujeto a revisión legal antes de usarse con clientes reales.

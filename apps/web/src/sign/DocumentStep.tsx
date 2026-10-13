@@ -188,6 +188,11 @@ export function DocumentStep({
   return (
     <section className="card letter">
       {view.blocks.map(draw)}
+      {view.footer && (
+        <p className="doc-footer muted small">
+          <Rich text={view.footer} />
+        </p>
+      )}
 
       <div className={`accept${shown.accepted ? ' invalid' : ''}`}>
         <label className="check">

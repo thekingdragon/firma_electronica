@@ -59,6 +59,8 @@ export function RequestDetail() {
           <dd>{req.signerName}</dd>
           <dt>Referencia interna</dt>
           <dd>{req.externalRef}</dd>
+          <dt>Atendió</dt>
+          <dd>{req.attendedBy ?? '—'}</dd>
           {getDocumentTypeUi(req.documentType)?.detail(req.data)}
           <dt>Creada</dt>
           <dd>{formatDateTime(req.createdAt)}</dd>

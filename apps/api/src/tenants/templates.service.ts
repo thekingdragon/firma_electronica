@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { parseBlocks } from '../documents/blocks';
+import { parseBlocks, footerOf, footerProblems } from '../documents/blocks';
 
 export interface TemplateChanges {
   /** Cláusula de aceptación electrónica que ve y acepta el firmante. */
@@ -16,6 +16,8 @@ export interface TemplateChanges {
   legalReviewed?: boolean;
   /** Los bloques del documento (se validan al publicar). Reemplazan a los textos sueltos y al anexo anterior. */
   blocks?: unknown;
+  /** Pie de página de cada hoja (texto con variables y negrita). `null` o vacío lo quita; sin este campo se conserva el anterior. */
+  footer?: string | null;
   /** Quién la publica, para dejar constancia. */
   publishedBy?: string;
 }
@@ -110,6 +112,17 @@ export async function publishTemplate(
       annexText = null;
     }
     if (changes.legalReviewed !== undefined) body.legalReviewed = changes.legalReviewed;
+    // El pie de página no es un bloque: al reemplazar los bloques se conserva el que ya tenía, salvo que se indique otro.
+    const previousFooter = footerOf(base.body_json);
+    if (changes.footer !== undefined) {
+      const text = (changes.footer ?? '').trim();
+      const problems = footerProblems(text);
+      if (problems.length) throw new Error(problems.join(' '));
+      if (text) body.footer = text;
+      else delete body.footer;
+    } else if (previousFooter) {
+      body.footer = previousFooter;
+    }
 
     await client.query('UPDATE document_templates SET active = false WHERE tenant_id = $1 AND document_type = $2 AND active', [
       tenantId,

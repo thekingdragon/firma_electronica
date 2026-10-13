@@ -7,7 +7,7 @@ import { sha256Hex } from '../common/crypto';
 import { APP_CONFIG, AppConfig } from '../config/config';
 import { PG_POOL } from '../db/db.module';
 import { getDocumentType } from '../document-types';
-import { BlocksError, ViewBlock, resolveBlocks, toViewBlocks } from '../documents/blocks';
+import { BlocksError, ViewBlock, VariableContext, fillVariables, footerOf, resolveBlocks, toViewBlocks } from '../documents/blocks';
 import { formatDate } from '../documents/render-blocks';
 import { MailNotConfiguredError, MailSendError, MailService } from '../mail/mail.service';
 import { OTP_POLICY, generateOtpCode, hashOtp, maskEmail, otpMatches } from './otp';
@@ -37,6 +37,8 @@ export interface SigningView {
   data: Record<string, unknown>;
   /** El documento como lista de bloques, con las variables ya completas: la página solo lo dibuja. */
   blocks: ViewBlock[];
+  /** Pie de página del documento con las variables ya completas (nombre, documento, fecha, quién atendió), o `null`. */
+  footer: string | null;
   clause: { version: number; text: string };
   policy: { photoRequired: boolean; photoChallengeRequired: boolean; idPhotoRequired: boolean; idPhotoBackRequired: boolean; reviewRequired: boolean };
   expiresAt: string;
@@ -56,6 +58,8 @@ export interface LinkRow {
   snapshot: { signer: SigningView['signer']; data: Record<string, unknown> };
   legal_name: string;
   timezone: string;
+  /** Quién creó la solicitud y envió el enlace. */
+  attended_by: string | null;
   registry_code: string | null;
   template_version: number;
   body_json: Record<string, unknown>;
@@ -101,7 +105,7 @@ export class SignService {
       `SELECT r.id, r.tenant_id, r.document_type, r.reference, r.status, r.expires_at,
               (r.expires_at <= now()) AS expired, r.pdf_path,
               r.otp_channel, r.otp_to, r.snapshot,
-              t.legal_name, t.registry_code, t.timezone,
+              t.legal_name, t.registry_code, t.timezone, r.attended_by,
               d.version AS template_version, d.body_json, d.annex_text, d.clause_text,
               d.photo_required, d.photo_challenge_required, d.id_photo_required, d.id_photo_back_required, d.review_required
          FROM signature_requests r
@@ -296,15 +300,7 @@ export class SignService {
     try {
       return toViewBlocks(
         resolveBlocks(row.body_json, row.annex_text, getDocumentType(row.document_type)?.legacyBlocks),
-        {
-          brokerLegalName: row.legal_name,
-          brokerRegistryCode: row.registry_code,
-          signerName: row.snapshot.signer.name,
-          signerDocumentType: row.snapshot.signer.documentType,
-          signerDocumentNumber: row.snapshot.signer.documentNumber,
-          reference: row.reference,
-          date: formatDate(new Date(), row.timezone),
-        },
+        this.variablesOf(row),
         row.snapshot.data,
       );
     } catch (e) {
@@ -315,7 +311,22 @@ export class SignService {
     }
   }
 
+  /** Las variables del documento tal como las ve el firmante hoy (la fecha es la de hoy; al firmar será la de la firma). */
+  private variablesOf(row: LinkRow): VariableContext {
+    return {
+      brokerLegalName: row.legal_name,
+      brokerRegistryCode: row.registry_code,
+      signerName: row.snapshot.signer.name,
+      signerDocumentType: row.snapshot.signer.documentType,
+      signerDocumentNumber: row.snapshot.signer.documentNumber,
+      reference: row.reference,
+      date: formatDate(new Date(), row.timezone),
+      attendedBy: row.attended_by,
+    };
+  }
+
   private buildView(row: LinkRow): SigningView {
+    const footer = footerOf(row.body_json);
     return {
       reference: row.reference,
       documentType: row.document_type,
@@ -323,6 +334,7 @@ export class SignService {
       signer: row.snapshot.signer,
       data: row.snapshot.data,
       blocks: this.viewBlocks(row),
+      footer: footer ? fillVariables(footer, this.variablesOf(row)) : null,
       clause: { version: row.template_version, text: row.clause_text },
       policy: { photoRequired: row.photo_required, photoChallengeRequired: row.photo_challenge_required, idPhotoRequired: row.id_photo_required, idPhotoBackRequired: row.id_photo_back_required, reviewRequired: row.review_required },
       expiresAt: row.expires_at.toISOString(),

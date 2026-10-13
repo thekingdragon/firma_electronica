@@ -1,6 +1,8 @@
 /** Todo lo que un generador de documento necesita; no depende de la base ni de Nest. */
 export interface RenderInput {
   reference: string;
+  /** Quién atendió al cliente (envió el enlace); `null` si no se informó. */
+  attendedBy?: string | null;
   issuer: { legalName: string; registryCode: string | null; /** Zona IANA con que se escriben las fechas y horas del documento. */ timezone: string };
   signer: { name: string; documentType: string; documentNumber: string };
   /** Datos propios del tipo de documento (en la carta: `insurances`). */

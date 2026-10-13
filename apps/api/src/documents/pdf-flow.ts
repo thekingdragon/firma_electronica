@@ -28,6 +28,9 @@ export class PdfFlow {
   private page!: PDFPage;
   private y = 0;
   private readonly supported: Set<number>;
+  /** Líneas del pie de página de la plantilla (iguales en todas las hojas) y el espacio que se les reserva. */
+  private footerLines: Array<Array<Piece & { width: number }>> = [];
+  private footerSpace = FOOTER_SPACE;
 
   private constructor(
     readonly doc: PDFDocument,
@@ -64,7 +67,7 @@ export class PdfFlow {
 
   /** Reserva `h` puntos; si no caben en la página, abre otra. */
   need(h: number): void {
-    if (this.y - h < MARGIN + FOOTER_SPACE) this.newPage();
+    if (this.y - h < MARGIN + this.footerSpace) this.newPage();
   }
 
   gap(h: number): void {
@@ -285,13 +288,32 @@ export class PdfFlow {
     this.y -= 8;
   }
 
-  /** Pie de página con la referencia y «Página i de n» en todas las páginas. */
+  /**
+   * El pie de página de la plantilla. Se declara ANTES de maquetar el contenido: reserva el espacio al pie de cada hoja para que
+   * el texto nunca quede debajo de él. Admite negrita (**). Vacío = sin pie propio.
+   */
+  setFooter(text: string): void {
+    this.footerLines = text.trim() ? this.layoutRich(this.safe(text), 8, this.width, false) : [];
+    this.footerSpace = FOOTER_SPACE + (this.footerLines.length ? this.footerLines.length * 10 + 8 : 0);
+  }
+
+  /** Pie de página con la referencia y «Página i de n» en todas las páginas, y encima el pie de la plantilla si lo hay. */
   footers(text: string): void {
     const pages = this.doc.getPages();
     pages.forEach((p, i) => {
       const label = this.safe(`${text}  ·  Página ${i + 1} de ${pages.length}`);
       const w = this.regular.widthOfTextAtSize(label, 8);
       p.drawText(label, { x: (A4[0] - w) / 2, y: MARGIN - 18, size: 8, font: this.regular, color: MUTED });
+      // El pie de la plantilla, centrado, justo encima de la línea de referencia y página.
+      this.footerLines.forEach((line, k) => {
+        const lw = line.reduce((acc, piece) => acc + piece.width, 0);
+        let x = (A4[0] - lw) / 2;
+        const y = MARGIN - 18 + 14 + (this.footerLines.length - 1 - k) * 10;
+        for (const piece of line) {
+          if (piece.text.trim() !== '') p.drawText(piece.text, { x, y, size: 8, font: this.fontFor(piece.bold), color: INK });
+          x += piece.width;
+        }
+      });
     });
   }
 }

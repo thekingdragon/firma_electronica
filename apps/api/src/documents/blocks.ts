@@ -24,6 +24,7 @@ export const VARIABLES = [
   { name: 'signer.documentNumber', label: 'Número de documento del firmante' },
   { name: 'reference', label: 'Referencia del documento' },
   { name: 'date', label: 'Fecha (la de la firma)' },
+  { name: 'attendedBy', label: 'Quién atendió: la persona que envió el enlace' },
 ] as const;
 
 const VARIABLE_NAMES: ReadonlySet<string> = new Set(VARIABLES.map((v) => v.name));
@@ -37,6 +38,8 @@ export interface VariableContext {
   signerDocumentNumber: string;
   reference: string;
   date: string;
+  /** Quién creó la solicitud y envió el enlace; `null` si no se sabe (integración que no lo informó). */
+  attendedBy?: string | null;
 }
 
 /** Reemplaza las variables conocidas; las desconocidas quedan tal cual (la validación ya las rechazó al publicar). */
@@ -50,11 +53,29 @@ export function fillVariables(text: string, ctx: VariableContext): string {
     'signer.documentNumber': stripMarks(ctx.signerDocumentNumber),
     reference: stripMarks(ctx.reference),
     date: stripMarks(ctx.date),
+    attendedBy: stripMarks(ctx.attendedBy ?? '—'),
   };
   return text.replace(VARIABLE_RE, (whole, name: string) => (Object.prototype.hasOwnProperty.call(values, name) ? values[name] : whole));
 }
 
 /** Variables que usa un texto y que no existen. */
+/** Largo máximo del pie de página: debe caber en un par de líneas al pie de cada hoja. */
+export const MAX_FOOTER = 400;
+
+/** El pie de página de la plantilla (texto con variables y negrita), o `''` si no tiene. Vive en el contenido, no es un bloque. */
+export function footerOf(content: Record<string, unknown>): string {
+  return typeof content.footer === 'string' ? content.footer.trim() : '';
+}
+
+/** Problemas del pie de página, en el mismo lenguaje que los de los bloques (vacía = está bien). */
+export function footerProblems(text: string): string[] {
+  const out: string[] = [];
+  if (text.length > MAX_FOOTER) out.push(`El pie de página es demasiado largo (máximo ${MAX_FOOTER} caracteres).`);
+  if (hasUnbalancedMarks(text)) out.push('El pie de página tiene un «**» sin su pareja: la negrita se abre y se cierra con «**».');
+  for (const v of unknownVariables(text)) out.push(`El pie de página usa la variable {{${v}}}, que no existe. Disponibles: ${VARIABLES.map((x) => `{{${x.name}}}`).join(', ')}.`);
+  return out;
+}
+
 export function unknownVariables(text: string): string[] {
   const out: string[] = [];
   for (const m of text.matchAll(VARIABLE_RE)) if (!VARIABLE_NAMES.has(m[1])) out.push(m[1]);

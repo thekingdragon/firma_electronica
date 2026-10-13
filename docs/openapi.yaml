@@ -873,6 +873,12 @@ components:
           example: APPOINTMENT_LETTER
           description: Código del tipo de documento (catálogo `document_types`).
         externalRef: { type: string, description: ID de la solicitud o del cliente en el host. }
+        attendedBy:
+          type: string
+          maxLength: 160
+          description: |
+            Quién atendió al cliente: la persona que envía el enlace (NO quien revisa la identidad). Solo lo usa una integración con clave de
+            API; con sesión del panel se IGNORA y se guarda el nombre de quien la tiene. Sale en el pie de página del documento firmado.
         signer:
           type: object
           required: [name, documentType, documentNumber]
@@ -926,6 +932,7 @@ components:
         signerName: { type: string, description: Solo al leer (GET). }
         data: { type: object, description: Solo al leer (GET). Datos propios del tipo. }
         createdAt: { type: string, format: date-time, description: Solo al leer (GET). }
+        attendedBy: { type: string, nullable: true, description: "Quién atendió al cliente (quien creó la solicitud y envió el enlace). Solo al leer (GET)." }
         review: { type: string, enum: [VERIFIED, REJECTED], nullable: true, description: Solo al leer (GET). }
         deliveryMode: { type: string, enum: [HOST, SERVICE], description: Solo al leer (GET). }
     Evidence:
@@ -974,6 +981,7 @@ components:
           type: array
           items: { $ref: '#/components/schemas/ViewBlock' }
           description: El documento como lista de bloques, con las variables y las listas de datos ya resueltas.
+        footer: { type: string, nullable: true, description: 'Pie de página del documento (se repite al pie de cada hoja del PDF) con las variables ya completas; admite **negrita**.' }
         clause: { type: object, properties: { version: { type: integer }, text: { type: string } } }
         policy:
           type: object
@@ -1032,6 +1040,7 @@ components:
         legalReviewed: { type: boolean }
         legacy: { type: boolean, description: "true si se guardó antes de existir los bloques: los de abajo son los equivalentes." }
         blocks: { type: array, items: { $ref: '#/components/schemas/Block' } }
+        footer: { type: string, description: 'Pie de página de cada hoja (texto con variables y negrita); vacío si no tiene. Variables: las de `variables`, incluida {{attendedBy}} (quién atendió).' }
         clauseText: { type: string }
         policy:
           type: object
@@ -1049,6 +1058,7 @@ components:
       required: [blocks, clauseText, policy, publishedBy]
       properties:
         blocks: { type: array, items: { $ref: '#/components/schemas/Block' } }
+        footer: { type: string, nullable: true, maxLength: 400, description: 'Pie de página de cada hoja. Sin este campo se conserva el anterior; con "" se quita. 422 si usa una variable que no existe o una negrita sin pareja.' }
         clauseText: { type: string }
         policy:
           type: object

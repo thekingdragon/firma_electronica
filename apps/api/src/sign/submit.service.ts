@@ -201,6 +201,7 @@ export class SubmitService implements OnApplicationShutdown {
       const signedAt = (await client.query<{ now: Date }>('SELECT now()')).rows[0].now;
       const unsealed = await renderDocument(link.document_type, {
           reference: link.reference,
+          attendedBy: link.attended_by,
           issuer: { legalName: link.legal_name, registryCode: link.registry_code, timezone: link.timezone },
           signer: link.snapshot.signer,
           data: link.snapshot.data,

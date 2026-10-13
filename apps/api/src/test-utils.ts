@@ -285,3 +285,19 @@ export function startFakeTsa(): Promise<FakeTsa> {
     });
   });
 }
+
+/** El texto corrido de cada página de un PDF generado por el servicio (Helvetica en WinAnsi), para comprobar qué dice sin abrirlo. */
+export async function pdfPagesText(bytes: Uint8Array): Promise<string[]> {
+  const { PDFArray, PDFDocument, PDFRawStream, PDFRef, decodePDFRawStream } = await import('pdf-lib');
+  const doc = await PDFDocument.load(bytes);
+  return doc.getPages().map((page) => {
+    const contents = page.node.Contents();
+    const refs = contents instanceof PDFArray ? contents.asArray() : [contents];
+    let stream = '';
+    for (const r of refs) {
+      const obj = r instanceof PDFRef ? doc.context.lookup(r) : r;
+      if (obj instanceof PDFRawStream) stream += Buffer.from(decodePDFRawStream(obj).decode()).toString('latin1') + '\n';
+    }
+    return [...stream.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g)].map((m) => Buffer.from(m[1], 'hex').toString('latin1')).join(' ');
+  });
+}

@@ -39,9 +39,12 @@ export class RequestsController {
     @Body() body: unknown,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Res({ passthrough: true }) res: Response,
+    @Req() req: Request & { user?: SessionUser },
   ): Promise<SignatureRequestView> {
     const input = this.requests.parseBody(body);
-    const { view, replay } = await this.requests.create(tenant, input, idempotencyKey);
+    // Quién atendió: con sesión, SIEMPRE quien la tiene (no se puede falsear desde el cuerpo); con clave de API, lo que informe el host.
+    const attendedBy = req.user ? req.user.name : (input.attendedBy ?? null);
+    const { view, replay } = await this.requests.create(tenant, input, idempotencyKey, attendedBy);
     // Un replay devuelve la misma solicitud con 200: el host distingue «creada» de «ya existía».
     if (replay) res.status(200);
     return view;
