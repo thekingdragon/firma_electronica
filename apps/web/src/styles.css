@@ -1010,3 +1010,6 @@ div.photo-box {
 .recovery { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem 1rem; font-size: 1.05rem; line-height: 1.7; columns: 2; user-select: all; }
 
 .row-alert td { background: rgba(220, 38, 38, 0.06); }
+
+.mail-test { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.ok { color: #166534; }

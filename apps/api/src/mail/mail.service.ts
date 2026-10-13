@@ -133,28 +133,29 @@ export async function saveMailSettings(
     passwordEnc = seal(secretsKey, 'smtp-password', input.password);
   }
   const username = input.username ?? null;
+  // La base exige «usuario y contraseña van juntos o ninguno van» (CHECK). Sin contraseña nueva y CON usuario, se conserva la
+  // guardada: es una actualización de la fila existente (un INSERT con contraseña vacía ni siquiera llegaría al ON CONFLICT).
+  if (username !== null && passwordEnc === undefined) {
+    const r = await pool.query(
+      `UPDATE tenant_mail_settings SET host = $2, port = $3, secure = $4, username = $5, from_name = $6, from_email = $7, reply_to = $8,
+              verified_at = NULL, updated_at = now()
+        WHERE tenant_id = $1 AND password_enc IS NOT NULL`,
+      [tenantId, input.host, input.port, input.secure ?? null, username, input.fromName ?? null, input.fromEmail, input.replyTo ?? null],
+    );
+    if (r.rowCount) return;
+    throw new Error('Con usuario hay que indicar la contraseña: no hay una guardada que conservar.');
+  }
+  // Sin usuario (servidor sin autenticación) la contraseña también queda vacía; con usuario, es la nueva.
   await pool.query(
     `INSERT INTO tenant_mail_settings
        (tenant_id, host, port, secure, username, password_enc, from_name, from_email, reply_to, verified_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, now())
      ON CONFLICT (tenant_id) DO UPDATE SET
        host = EXCLUDED.host, port = EXCLUDED.port, secure = EXCLUDED.secure,
-       username = EXCLUDED.username,
-       password_enc = CASE WHEN $10::boolean THEN EXCLUDED.password_enc ELSE tenant_mail_settings.password_enc END,
+       username = EXCLUDED.username, password_enc = EXCLUDED.password_enc,
        from_name = EXCLUDED.from_name, from_email = EXCLUDED.from_email, reply_to = EXCLUDED.reply_to,
        verified_at = NULL, updated_at = now()`,
-    [
-      tenantId,
-      input.host,
-      input.port,
-      input.secure ?? null,
-      username,
-      passwordEnc ?? null,
-      input.fromName ?? null,
-      input.fromEmail,
-      input.replyTo ?? null,
-      input.password !== undefined,
-    ],
+    [tenantId, input.host, input.port, input.secure ?? null, username, username === null ? null : (passwordEnc ?? null), input.fromName ?? null, input.fromEmail, input.replyTo ?? null],
   );
 }
 

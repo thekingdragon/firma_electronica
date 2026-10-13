@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { ApiRequestError, api } from '../api';
 import { useSession } from '../auth';
 import { desfaseUtc, zonasDisponibles } from '../fechas';
+import { MailSettingsCard } from '../components/MailSettingsCard';
 import { setPanelZone } from '../format';
 
 export function Settings() {
@@ -50,6 +51,8 @@ export function Settings() {
       <div className="page-head">
         <h1>Ajustes</h1>
       </div>
+      <MailSettingsCard />
+
       <form className="card" onSubmit={save}>
         <h2>Zona horaria</h2>
         <p className="muted">

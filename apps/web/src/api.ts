@@ -378,3 +378,36 @@ export const operatorApi = {
   addAdmin: (id: string, email: string, name: string) =>
     call<{ email: string; temporaryPassword: string }>('POST', `/v1/operator/tenants/${id}/admin`, { email, name }).then((r) => r.data),
 };
+
+// ---- Correo propio de la corredora (SMTP) ----
+export interface MailSettings {
+  configured: boolean;
+  host: string | null;
+  port: number | null;
+  secure: boolean | null;
+  username: string | null;
+  hasPassword: boolean;
+  fromName: string | null;
+  fromEmail: string | null;
+  replyTo: string | null;
+  verifiedAt: string | null;
+  lastOkAt: string | null;
+  lastError: string | null;
+}
+export interface MailSettingsInput {
+  host: string;
+  port: number;
+  secure: boolean | null;
+  username: string | null;
+  /** Solo al cambiarla: sin este campo el servidor conserva la guardada. */
+  password?: string;
+  fromName: string | null;
+  fromEmail: string;
+  replyTo: string | null;
+}
+
+export const mailApi = {
+  get: () => call<MailSettings>('GET', '/v1/settings/mail').then((r) => r.data),
+  save: (body: MailSettingsInput) => call<MailSettings>('PUT', '/v1/settings/mail', body).then((r) => r.data),
+  test: (to: string) => call<{ ok: true; verifiedAt: string }>('POST', '/v1/settings/mail/test', { to }).then((r) => r.data),
+};

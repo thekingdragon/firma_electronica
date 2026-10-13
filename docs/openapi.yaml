@@ -160,6 +160,52 @@ paths:
       responses:
         '204': { description: Desactivado }
         '403': { description: MFA_REQUIRED }
+  /v1/settings/mail:
+    get:
+      summary: Correo (SMTP) de la corredora; nunca devuelve la contraseña
+      security: [{ apiKey: [] }, { bearer: [] }]
+      responses:
+        '200': { description: "{ configured, host, port, secure, username, hasPassword, fromName, fromEmail, replyTo, verifiedAt, lastOkAt, lastError }" }
+        '403': { description: FORBIDDEN_ROLE (solo administrador) }
+    put:
+      summary: Guarda el correo de la corredora (la contraseña se cifra)
+      description: |
+        Con `username` hay que mandar `password` la primera vez; después, omitirla conserva la guardada. El servidor no puede
+        apuntar a una dirección interna o privada (422 `MAIL_HOST_NOT_ALLOWED`). Al guardar, la configuración deja de estar verificada.
+      security: [{ apiKey: [] }, { bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [host, port, fromEmail]
+              properties:
+                host: { type: string, example: smtp.gmail.com }
+                port: { type: integer, example: 587 }
+                secure: { type: boolean, nullable: true, description: 'true = TLS directo (465); false = STARTTLS (587); null = según el puerto.' }
+                username: { type: string, nullable: true }
+                password: { type: string }
+                fromName: { type: string, nullable: true }
+                fromEmail: { type: string }
+                replyTo: { type: string, nullable: true }
+      responses:
+        '200': { description: La configuración guardada (sin contraseña) }
+        '422': { description: 'VALIDATION_ERROR o MAIL_HOST_NOT_ALLOWED' }
+        '503': { description: SECRETS_KEY_MISSING }
+  /v1/settings/mail/test:
+    post:
+      summary: Envía un correo de prueba; si sale, deja la configuración verificada
+      security: [{ apiKey: [] }, { bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [to], properties: { to: { type: string } } }
+      responses:
+        '200': { description: "{ ok: true, verifiedAt }" }
+        '409': { description: MAIL_NOT_CONFIGURED }
+        '502': { description: MAIL_SEND_FAILED (con una explicación accionable, no el error crudo del servidor) }
   /v1/users/events:
     get:
       summary: Bitácora de accesos y cambios de usuarios de la corredora (solo administrador con sesión)
