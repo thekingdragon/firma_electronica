@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 // El panel llama a /v1/* en el mismo origen; en desarrollo Vite lo reenvía a la API.
@@ -12,5 +12,11 @@ export default defineConfig({
     allowedHosts: ['.trycloudflare.com'], // túnel temporal de Cloudflare para probar la cámara por HTTPS
     strictPort: true, // 5173 es la web de Polix en producción: no compartir puerto
     proxy: { '/v1': { target: API, changeOrigin: true } },
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test-setup.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
+    css: false,
   },
 });

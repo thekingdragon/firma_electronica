@@ -21,6 +21,7 @@
     "operator:create": "ts-node src/auth/operator-cli.ts create",
     "operator:reset": "ts-node src/auth/operator-cli.ts reset",
     "backup": "ts-node src/ops/backup.ts",
+    "preflight": "ts-node src/ops/preflight.ts",
     "evidence:verify": "ts-node src/ops/verify-evidence.ts"
   },
   "dependencies": {

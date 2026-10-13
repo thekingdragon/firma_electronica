@@ -92,7 +92,12 @@ Imprime la **clave de API** y el **secreto de webhook** una sola vez. Guárdelos
 
 ### Correo (SMTP propio de la corredora)
 
-Cada corredora envía desde **su** servidor de correo, nunca desde un dominio de la plataforma. La
+**Lo normal es configurarlo desde el panel:** el administrador entra a **Ajustes → Correo de la corredora**, elige su proveedor (Gmail,
+Microsoft 365 u otro), escribe usuario y contraseña y pulsa **Enviar correo de prueba**. La contraseña se guarda cifrada y no se vuelve a
+mostrar; el panel indica si el correo quedó **verificado**. Con Gmail hace falta una «contraseña de aplicación» (no la normal) y con Microsoft 365
+que el administrador del correo habilite «SMTP autenticado». El servidor de correo no puede apuntar a una dirección interna o privada.
+
+Cada corredora envía desde **su** servidor de correo, nunca desde un dominio de la plataforma. Por línea de comandos (alternativa) la
 contraseña va por variable de entorno para que no quede en el historial de la consola:
 
 ```
@@ -150,7 +155,24 @@ Cómo se hace depende de cómo esté configurado el túnel de Polix (por archivo
 panel de Cloudflare); **no se revisó en este equipo**. **El servicio no abre ningún puerto al exterior**:
 solo escucha en `127.0.0.1`.
 
-## 7. Verificación después de instalar
+## 7. Verificación antes de abrir al público y después de instalar
+
+**Antes de dar el servicio por listo, ejecute la verificación previa.** Revisa de una vez la configuración, la base y los datos, dice qué
+falta y cómo arreglarlo, y sale con error si hay algo que impide producción:
+
+```
+npm run preflight -w api
+```
+
+Comprueba, entre otras cosas: `NODE_ENV=production`, `ALLOW_DEV_OTP` apagado, dirección pública definitiva con https (no un túnel provisional),
+`SECRETS_KEY`, sello de tiempo, migraciones al día, aislamiento entre corredoras activo, un operador con segundo factor, que no queden usuarios de
+prueba, que cada corredora tenga **correo verificado** y un administrador, que las plantillas tengan revisión legal y que exista un respaldo
+reciente. **No imprime secretos.** Al final recuerda lo que ninguna comprobación automática puede asegurar (respaldos fuera de la máquina,
+`SECRETS_KEY` guardada aparte, aprobación del abogado, cámara probada en celulares reales: ver `PRUEBA-CAMARA.md`).
+
+Para el personal que revisa identidades hay una guía lista para entregar: `GUIA-REVISION.md`.
+
+Después de instalar:
 
 - `GET https://<su-dominio>/v1/health` → `{"database":"up"}`.
 - Abrir `https://<su-dominio>/` → pantalla de conexión del panel.

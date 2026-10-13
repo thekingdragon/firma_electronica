@@ -379,7 +379,10 @@ un SMTP real— más un recorrido manual completo en el navegador montado como e
 - **La cámara solo se probó con una cámara sintética** inyectada en el navegador de escritorio. Falta
   probar en celulares reales (sobre todo iOS/Safari y Android de gama baja) y con conexiones lentas:
   permisos, resolución real y los pisos de resolución (selfie recortada ≥ 540×640; documento recortado ≥ 600×1000), que pueden rechazar equipos antiguos.
-- **El front no tiene pruebas automáticas**; solo se verificó a mano. La API sí está muy probada.
+- **El front tiene pruebas automáticas de lo que no depende del equipo** (`npm test -w web`, vitest + jsdom: fechas y zonas, cliente HTTP y
+  renovación de sesión, login con segundo factor, editor de bloques, tipos de documento, formulario de correo, marco y pisos de la cámara).
+  **No cubren la cámara real, el recorrido completo de firma de un cliente ni el diseño en pantallas pequeñas:** eso sigue siendo manual
+  (`docs/PRUEBA-CAMARA.md`). La API sí está muy probada.
 - **Revisión legal pendiente.** Las plantillas por defecto son BORRADOR (`legalReviewed: false` y la
   cláusula lo dice). Publicar el texto definitivo: `template:publish`. Nada impide hoy, por código, usar
   el servicio con el borrador (ver §11).
